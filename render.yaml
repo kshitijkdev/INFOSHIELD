@@ -1,0 +1,28 @@
+# Render Infrastructure Blueprint for InfoShield Backend
+# Docs: https://render.com/docs/blueprint-spec
+services:
+  - type: web
+    name: infoshield-backend
+    runtime: docker
+    dockerfilePath: Dockerfile
+    plan: free
+    region: oregon
+    autoDeploy: true
+    healthCheckPath: /api/health
+    envVars:
+      - key: ENV
+        value: production
+      - key: SUPABASE_URL
+        sync: false # Set in Render Dashboard: your Supabase Project URL
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false # Set in Render Dashboard: your Supabase Service Role Secret Key
+      - key: DEMO_USER_ID
+        value: 00000000-0000-0000-0000-000000000001
+      - key: ALLOWED_ORIGINS
+        sync: false # Set in Render Dashboard: your Vercel URL e.g. https://infoshield.vercel.app
+      - key: ALLOWED_ORIGIN_REGEX
+        value: ^https:\/\/.*\.vercel\.app$
+      - key: CLEANUP_SCAN_TEMP
+        value: "true"
+      - key: CLEANUP_ORIGINALS
+        value: "false"

@@ -1,0 +1,35 @@
+{
+  "model_name": "RandomForestClassifier",
+  "model_version": "prototype-1",
+  "library": "scikit-learn",
+  "categorical_features": [
+    "pii_type",
+    "document_type",
+    "purpose_necessity",
+    "purpose_domain",
+    "purpose_task",
+    "identity_binding_requirement",
+    "exposure_level"
+  ],
+  "numeric_features": [
+    "pii_sensitivity",
+    "ocr_confidence",
+    "pii_confidence",
+    "context_risk"
+  ],
+  "classes": [
+    "LOW",
+    "MEDIUM",
+    "HIGH"
+  ],
+  "metrics": {
+    "test_accuracy": 0.9375,
+    "macro_precision": 0.9444,
+    "macro_recall": 0.9126,
+    "macro_f1": 0.9248,
+    "weighted_f1": 0.9374
+  },
+  "training_samples": 320,
+  "test_samples": 64,
+  "disclaimer": "PROTOTYPE MODEL: Trained on synthetic/curated risk dataset for demonstration purposes. Production deployment requires training against real organizational governance policy datasets."
+}

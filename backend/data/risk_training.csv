@@ -1,0 +1,321 @@
+pii_type,document_type,pii_sensitivity,purpose_necessity,purpose_domain,purpose_task,ocr_confidence,pii_confidence,context_risk,identity_binding_requirement,exposure_level,risk_class
+person_name,Aadhaar Card,0.35,REQUIRED,education,college_admission,0.94,0.85,0.45,HIGH,LOW,LOW
+person_name,Aadhaar Card,0.35,REQUIRED,education,college_admission,0.89,0.88,0.45,HIGH,LOW,LOW
+person_name,Aadhaar Card,0.35,REQUIRED,education,college_admission,0.95,0.94,0.45,HIGH,LOW,LOW
+person_name,Aadhaar Card,0.35,REQUIRED,education,college_admission,0.97,0.86,0.45,HIGH,LOW,LOW
+date_of_birth,Aadhaar Card,0.7,CONDITIONAL,education,college_admission,0.91,0.85,0.45,MEDIUM,MEDIUM,MEDIUM
+date_of_birth,Aadhaar Card,0.7,CONDITIONAL,education,college_admission,0.88,0.92,0.45,MEDIUM,MEDIUM,MEDIUM
+date_of_birth,Aadhaar Card,0.7,CONDITIONAL,education,college_admission,0.85,0.88,0.45,MEDIUM,MEDIUM,MEDIUM
+date_of_birth,Aadhaar Card,0.7,CONDITIONAL,education,college_admission,0.94,0.93,0.45,MEDIUM,MEDIUM,MEDIUM
+gender,Aadhaar Card,0.3,CONDITIONAL,education,college_admission,0.88,0.93,0.45,LOW,LOW,LOW
+gender,Aadhaar Card,0.3,CONDITIONAL,education,college_admission,0.96,0.85,0.45,LOW,LOW,LOW
+gender,Aadhaar Card,0.3,CONDITIONAL,education,college_admission,0.96,0.95,0.45,LOW,LOW,LOW
+gender,Aadhaar Card,0.3,CONDITIONAL,education,college_admission,0.9,0.87,0.45,LOW,LOW,LOW
+mobile_number,Aadhaar Card,0.75,UNNECESSARY,education,college_admission,0.98,0.9,0.45,LOW,HIGH,HIGH
+mobile_number,Aadhaar Card,0.75,UNNECESSARY,education,college_admission,0.86,0.86,0.45,LOW,HIGH,HIGH
+mobile_number,Aadhaar Card,0.75,UNNECESSARY,education,college_admission,0.97,0.93,0.45,LOW,HIGH,HIGH
+mobile_number,Aadhaar Card,0.75,UNNECESSARY,education,college_admission,0.96,0.95,0.45,LOW,HIGH,HIGH
+aadhaar_number,Aadhaar Card,0.99,CONDITIONAL,education,college_admission,0.93,0.99,0.45,HIGH,HIGH,HIGH
+aadhaar_number,Aadhaar Card,0.99,CONDITIONAL,education,college_admission,0.9,0.93,0.45,HIGH,HIGH,HIGH
+aadhaar_number,Aadhaar Card,0.99,CONDITIONAL,education,college_admission,0.97,0.94,0.45,HIGH,HIGH,HIGH
+aadhaar_number,Aadhaar Card,0.99,CONDITIONAL,education,college_admission,0.97,0.93,0.45,HIGH,HIGH,HIGH
+vid,Aadhaar Card,0.99,UNNECESSARY,education,college_admission,0.95,0.86,0.45,LOW,HIGH,HIGH
+vid,Aadhaar Card,0.99,UNNECESSARY,education,college_admission,0.88,0.89,0.45,LOW,HIGH,HIGH
+vid,Aadhaar Card,0.99,UNNECESSARY,education,college_admission,0.86,0.88,0.45,LOW,HIGH,HIGH
+vid,Aadhaar Card,0.99,UNNECESSARY,education,college_admission,0.86,0.89,0.45,LOW,HIGH,HIGH
+address,Aadhaar Card,0.65,CONDITIONAL,education,college_admission,0.94,0.9,0.45,MEDIUM,MEDIUM,MEDIUM
+address,Aadhaar Card,0.65,CONDITIONAL,education,college_admission,0.9,0.88,0.45,MEDIUM,MEDIUM,MEDIUM
+address,Aadhaar Card,0.65,CONDITIONAL,education,college_admission,0.89,0.98,0.45,MEDIUM,MEDIUM,MEDIUM
+address,Aadhaar Card,0.65,CONDITIONAL,education,college_admission,0.94,0.94,0.45,MEDIUM,MEDIUM,MEDIUM
+qr_code,Aadhaar Card,0.98,UNNECESSARY,education,college_admission,0.87,0.95,0.45,LOW,HIGH,HIGH
+qr_code,Aadhaar Card,0.98,UNNECESSARY,education,college_admission,0.87,0.9,0.45,LOW,HIGH,HIGH
+qr_code,Aadhaar Card,0.98,UNNECESSARY,education,college_admission,0.99,0.94,0.45,LOW,HIGH,HIGH
+qr_code,Aadhaar Card,0.98,UNNECESSARY,education,college_admission,0.93,0.95,0.45,LOW,HIGH,HIGH
+person_name,Aadhaar Card,0.35,REQUIRED,banking,kyc,0.97,0.96,0.85,HIGH,LOW,LOW
+person_name,Aadhaar Card,0.35,REQUIRED,banking,kyc,0.88,0.85,0.85,HIGH,LOW,LOW
+person_name,Aadhaar Card,0.35,REQUIRED,banking,kyc,0.89,0.89,0.85,HIGH,LOW,LOW
+person_name,Aadhaar Card,0.35,REQUIRED,banking,kyc,0.88,0.98,0.85,HIGH,LOW,LOW
+aadhaar_number,Aadhaar Card,0.99,REQUIRED,banking,kyc,0.97,0.89,0.85,HIGH,HIGH,HIGH
+aadhaar_number,Aadhaar Card,0.99,REQUIRED,banking,kyc,0.94,0.91,0.85,HIGH,HIGH,HIGH
+aadhaar_number,Aadhaar Card,0.99,REQUIRED,banking,kyc,0.98,0.91,0.85,HIGH,HIGH,HIGH
+aadhaar_number,Aadhaar Card,0.99,REQUIRED,banking,kyc,0.89,0.88,0.85,HIGH,HIGH,HIGH
+pan_number,PAN Card,0.95,REQUIRED,banking,kyc,0.93,0.89,0.85,HIGH,HIGH,HIGH
+pan_number,PAN Card,0.95,REQUIRED,banking,kyc,0.93,0.98,0.85,HIGH,HIGH,HIGH
+pan_number,PAN Card,0.95,REQUIRED,banking,kyc,0.91,0.88,0.85,HIGH,HIGH,HIGH
+pan_number,PAN Card,0.95,REQUIRED,banking,kyc,0.99,0.92,0.85,HIGH,HIGH,HIGH
+date_of_birth,Aadhaar Card,0.7,REQUIRED,banking,kyc,0.86,0.86,0.85,MEDIUM,MEDIUM,MEDIUM
+date_of_birth,Aadhaar Card,0.7,REQUIRED,banking,kyc,0.87,0.94,0.85,MEDIUM,MEDIUM,MEDIUM
+date_of_birth,Aadhaar Card,0.7,REQUIRED,banking,kyc,0.96,0.91,0.85,MEDIUM,MEDIUM,MEDIUM
+date_of_birth,Aadhaar Card,0.7,REQUIRED,banking,kyc,0.86,0.9,0.85,MEDIUM,MEDIUM,MEDIUM
+address,Aadhaar Card,0.65,REQUIRED,banking,kyc,0.99,0.92,0.85,MEDIUM,MEDIUM,MEDIUM
+address,Aadhaar Card,0.65,REQUIRED,banking,kyc,0.99,0.97,0.85,MEDIUM,MEDIUM,MEDIUM
+address,Aadhaar Card,0.65,REQUIRED,banking,kyc,0.85,0.95,0.85,MEDIUM,MEDIUM,MEDIUM
+address,Aadhaar Card,0.65,REQUIRED,banking,kyc,0.95,0.93,0.85,MEDIUM,MEDIUM,MEDIUM
+mobile_number,Aadhaar Card,0.75,CONDITIONAL,banking,kyc,0.89,0.94,0.85,LOW,MEDIUM,MEDIUM
+mobile_number,Aadhaar Card,0.75,CONDITIONAL,banking,kyc,0.87,0.91,0.85,LOW,MEDIUM,MEDIUM
+mobile_number,Aadhaar Card,0.75,CONDITIONAL,banking,kyc,0.91,0.98,0.85,LOW,MEDIUM,MEDIUM
+mobile_number,Aadhaar Card,0.75,CONDITIONAL,banking,kyc,0.97,0.89,0.85,LOW,MEDIUM,MEDIUM
+qr_code,Aadhaar Card,0.98,UNNECESSARY,banking,kyc,0.92,0.88,0.85,LOW,HIGH,HIGH
+qr_code,Aadhaar Card,0.98,UNNECESSARY,banking,kyc,0.98,0.97,0.85,LOW,HIGH,HIGH
+qr_code,Aadhaar Card,0.98,UNNECESSARY,banking,kyc,0.89,0.94,0.85,LOW,HIGH,HIGH
+qr_code,Aadhaar Card,0.98,UNNECESSARY,banking,kyc,0.94,0.87,0.85,LOW,HIGH,HIGH
+person_name,Identity Document,0.35,REQUIRED,employment,onboarding,0.96,0.93,0.6,HIGH,LOW,LOW
+person_name,Identity Document,0.35,REQUIRED,employment,onboarding,0.96,0.92,0.6,HIGH,LOW,LOW
+person_name,Identity Document,0.35,REQUIRED,employment,onboarding,0.85,0.9,0.6,HIGH,LOW,LOW
+person_name,Identity Document,0.35,REQUIRED,employment,onboarding,0.85,0.98,0.6,HIGH,LOW,LOW
+pan_number,PAN Card,0.95,REQUIRED,employment,onboarding,0.97,0.97,0.6,HIGH,HIGH,HIGH
+pan_number,PAN Card,0.95,REQUIRED,employment,onboarding,0.89,0.86,0.6,HIGH,HIGH,HIGH
+pan_number,PAN Card,0.95,REQUIRED,employment,onboarding,0.97,0.98,0.6,HIGH,HIGH,HIGH
+pan_number,PAN Card,0.95,REQUIRED,employment,onboarding,0.86,0.92,0.6,HIGH,HIGH,HIGH
+bank_account_number,Bank Statement,0.95,REQUIRED,employment,onboarding,0.86,0.96,0.6,HIGH,HIGH,HIGH
+bank_account_number,Bank Statement,0.95,REQUIRED,employment,onboarding,0.96,0.87,0.6,HIGH,HIGH,HIGH
+bank_account_number,Bank Statement,0.95,REQUIRED,employment,onboarding,0.92,0.93,0.6,HIGH,HIGH,HIGH
+bank_account_number,Bank Statement,0.95,REQUIRED,employment,onboarding,0.89,0.97,0.6,HIGH,HIGH,HIGH
+aadhaar_number,Aadhaar Card,0.99,CONDITIONAL,employment,onboarding,0.91,0.88,0.6,HIGH,HIGH,HIGH
+aadhaar_number,Aadhaar Card,0.99,CONDITIONAL,employment,onboarding,0.93,0.95,0.6,HIGH,HIGH,HIGH
+aadhaar_number,Aadhaar Card,0.99,CONDITIONAL,employment,onboarding,0.88,0.89,0.6,HIGH,HIGH,HIGH
+aadhaar_number,Aadhaar Card,0.99,CONDITIONAL,employment,onboarding,0.99,0.94,0.6,HIGH,HIGH,HIGH
+mobile_number,Aadhaar Card,0.75,REQUIRED,employment,onboarding,0.91,0.92,0.6,LOW,MEDIUM,LOW
+mobile_number,Aadhaar Card,0.75,REQUIRED,employment,onboarding,0.87,0.88,0.6,LOW,MEDIUM,LOW
+mobile_number,Aadhaar Card,0.75,REQUIRED,employment,onboarding,0.9,0.93,0.6,LOW,MEDIUM,LOW
+mobile_number,Aadhaar Card,0.75,REQUIRED,employment,onboarding,0.88,0.88,0.6,LOW,MEDIUM,LOW
+address,Aadhaar Card,0.65,CONDITIONAL,employment,onboarding,0.86,0.94,0.6,MEDIUM,MEDIUM,MEDIUM
+address,Aadhaar Card,0.65,CONDITIONAL,employment,onboarding,0.88,0.98,0.6,MEDIUM,MEDIUM,MEDIUM
+address,Aadhaar Card,0.65,CONDITIONAL,employment,onboarding,0.97,0.86,0.6,MEDIUM,MEDIUM,MEDIUM
+address,Aadhaar Card,0.65,CONDITIONAL,employment,onboarding,0.88,0.94,0.6,MEDIUM,MEDIUM,MEDIUM
+vid,Aadhaar Card,0.99,UNNECESSARY,employment,onboarding,0.88,0.87,0.6,LOW,HIGH,HIGH
+vid,Aadhaar Card,0.99,UNNECESSARY,employment,onboarding,0.98,0.93,0.6,LOW,HIGH,HIGH
+vid,Aadhaar Card,0.99,UNNECESSARY,employment,onboarding,0.92,0.96,0.6,LOW,HIGH,HIGH
+vid,Aadhaar Card,0.99,UNNECESSARY,employment,onboarding,0.96,0.88,0.6,LOW,HIGH,HIGH
+person_name,Passport,0.35,REQUIRED,travel,visa_application,0.86,0.91,0.65,HIGH,LOW,LOW
+person_name,Passport,0.35,REQUIRED,travel,visa_application,0.91,0.92,0.65,HIGH,LOW,LOW
+person_name,Passport,0.35,REQUIRED,travel,visa_application,0.95,0.94,0.65,HIGH,LOW,LOW
+person_name,Passport,0.35,REQUIRED,travel,visa_application,0.99,0.86,0.65,HIGH,LOW,LOW
+date_of_birth,Passport,0.7,REQUIRED,travel,visa_application,0.91,0.9,0.65,MEDIUM,MEDIUM,LOW
+date_of_birth,Passport,0.7,REQUIRED,travel,visa_application,0.97,0.88,0.65,MEDIUM,MEDIUM,LOW
+date_of_birth,Passport,0.7,REQUIRED,travel,visa_application,0.88,0.91,0.65,MEDIUM,MEDIUM,LOW
+date_of_birth,Passport,0.7,REQUIRED,travel,visa_application,0.91,0.89,0.65,MEDIUM,MEDIUM,LOW
+address,Passport,0.65,CONDITIONAL,travel,visa_application,0.88,0.98,0.65,MEDIUM,MEDIUM,MEDIUM
+address,Passport,0.65,CONDITIONAL,travel,visa_application,0.91,0.97,0.65,MEDIUM,MEDIUM,MEDIUM
+address,Passport,0.65,CONDITIONAL,travel,visa_application,0.93,0.86,0.65,MEDIUM,MEDIUM,MEDIUM
+address,Passport,0.65,CONDITIONAL,travel,visa_application,0.99,0.97,0.65,MEDIUM,MEDIUM,MEDIUM
+aadhaar_number,Aadhaar Card,0.99,UNNECESSARY,travel,visa_application,0.99,0.98,0.65,HIGH,HIGH,HIGH
+aadhaar_number,Aadhaar Card,0.99,UNNECESSARY,travel,visa_application,0.97,0.87,0.65,HIGH,HIGH,HIGH
+aadhaar_number,Aadhaar Card,0.99,UNNECESSARY,travel,visa_application,0.92,0.88,0.65,HIGH,HIGH,HIGH
+aadhaar_number,Aadhaar Card,0.99,UNNECESSARY,travel,visa_application,0.91,0.86,0.65,HIGH,HIGH,HIGH
+bank_account_number,Bank Statement,0.95,REQUIRED,travel,visa_application,0.9,0.99,0.65,HIGH,HIGH,HIGH
+bank_account_number,Bank Statement,0.95,REQUIRED,travel,visa_application,0.89,0.96,0.65,HIGH,HIGH,HIGH
+bank_account_number,Bank Statement,0.95,REQUIRED,travel,visa_application,0.91,0.91,0.65,HIGH,HIGH,HIGH
+bank_account_number,Bank Statement,0.95,REQUIRED,travel,visa_application,0.98,0.99,0.65,HIGH,HIGH,HIGH
+gender,Identity Document,0.3,REQUIRED,employment,job_application,0.68,0.67,0.6,LOW,MEDIUM,LOW
+pin_code,Aadhaar Card,0.55,REQUIRED,banking,loan_application,0.83,0.82,0.85,LOW,HIGH,MEDIUM
+gender,Passport,0.3,UNNECESSARY,education,scholarship,0.93,0.67,0.45,LOW,HIGH,MEDIUM
+vid,Driving Licence,0.99,UNNECESSARY,government,government_service,0.95,0.73,0.7,LOW,HIGH,HIGH
+qr_code,Aadhaar Card,0.98,UNNECESSARY,general,identity_verification,0.86,0.84,0.5,LOW,HIGH,HIGH
+date_of_birth,College ID,0.7,UNNECESSARY,employment,background_verification,0.88,0.73,0.6,MEDIUM,HIGH,HIGH
+address,Passport,0.65,CONDITIONAL,general,unknown,0.72,0.91,0.5,MEDIUM,MEDIUM,MEDIUM
+vid,Aadhaar Card,0.99,UNNECESSARY,travel,visa_application,0.82,0.68,0.65,LOW,HIGH,HIGH
+gender,Driving Licence,0.3,CONDITIONAL,healthcare,hospital_registration,0.96,0.95,0.75,LOW,HIGH,MEDIUM
+bank_account_number,Marksheet,0.95,CONDITIONAL,banking,kyc,0.87,0.86,0.85,HIGH,LOW,HIGH
+ifsc_code,Aadhaar Card,0.5,CONDITIONAL,healthcare,insurance_claim,0.64,0.95,0.75,LOW,LOW,MEDIUM
+mobile_number,PAN Card,0.75,UNNECESSARY,education,examination,0.82,0.74,0.45,LOW,HIGH,HIGH
+qr_code,Driving Licence,0.98,UNNECESSARY,banking,loan_application,0.85,0.74,0.85,LOW,HIGH,HIGH
+person_name,College ID,0.35,REQUIRED,education,scholarship,0.92,0.66,0.45,HIGH,MEDIUM,LOW
+date_of_birth,Passport,0.7,CONDITIONAL,general,unknown,0.89,0.84,0.5,MEDIUM,HIGH,HIGH
+address,Aadhaar Card,0.65,REQUIRED,education,examination,0.95,0.84,0.45,MEDIUM,LOW,LOW
+date_of_birth,Passport,0.7,REQUIRED,government,subsidy,0.72,0.96,0.7,MEDIUM,HIGH,MEDIUM
+ifsc_code,Aadhaar Card,0.5,REQUIRED,banking,credit_verification,0.7,0.68,0.85,LOW,LOW,LOW
+ifsc_code,Bank Statement,0.5,UNNECESSARY,general,identity_verification,0.96,0.73,0.5,LOW,HIGH,HIGH
+pan_number,Passport,0.95,CONDITIONAL,government,subsidy,0.96,0.92,0.7,HIGH,LOW,HIGH
+address,Driving Licence,0.65,REQUIRED,banking,bank_account_opening,0.64,0.95,0.85,MEDIUM,LOW,MEDIUM
+person_name,Driving Licence,0.35,REQUIRED,employment,background_verification,0.74,0.93,0.6,HIGH,MEDIUM,LOW
+bank_account_number,Driving Licence,0.95,UNNECESSARY,education,college_admission,0.76,0.74,0.45,HIGH,HIGH,HIGH
+vid,College ID,0.99,UNNECESSARY,banking,credit_verification,0.76,0.98,0.85,LOW,HIGH,HIGH
+gender,Marksheet,0.3,REQUIRED,education,college_admission,0.67,0.98,0.45,LOW,MEDIUM,LOW
+mobile_number,Aadhaar Card,0.75,UNNECESSARY,education,examination,0.77,0.9,0.45,LOW,HIGH,HIGH
+date_of_birth,Bank Statement,0.7,UNNECESSARY,general,identity_verification,0.65,0.96,0.5,MEDIUM,HIGH,HIGH
+bank_account_number,College ID,0.95,UNNECESSARY,education,scholarship,0.6,0.96,0.45,HIGH,HIGH,HIGH
+gender,Driving Licence,0.3,CONDITIONAL,banking,credit_verification,0.97,0.96,0.85,LOW,HIGH,MEDIUM
+qr_code,Marksheet,0.98,UNNECESSARY,education,examination,0.72,0.76,0.45,LOW,HIGH,HIGH
+address,Marksheet,0.65,UNNECESSARY,government,government_service,0.82,0.72,0.7,MEDIUM,MEDIUM,HIGH
+email_address,Bank Statement,0.65,UNNECESSARY,employment,onboarding,0.72,0.84,0.6,LOW,LOW,HIGH
+aadhaar_number,College ID,0.99,CONDITIONAL,banking,kyc,0.84,0.76,0.85,HIGH,LOW,HIGH
+person_name,Identity Document,0.35,REQUIRED,employment,background_verification,0.67,0.68,0.6,HIGH,LOW,LOW
+gender,Marksheet,0.3,REQUIRED,education,financial_aid,0.72,0.92,0.45,LOW,LOW,LOW
+pan_number,Aadhaar Card,0.95,CONDITIONAL,education,scholarship,0.84,0.91,0.45,HIGH,MEDIUM,HIGH
+person_name,Bank Statement,0.35,REQUIRED,general,unknown,0.87,0.82,0.5,HIGH,LOW,LOW
+bank_account_number,Passport,0.95,UNNECESSARY,general,unknown,0.95,0.94,0.5,HIGH,HIGH,HIGH
+vid,Bank Statement,0.99,UNNECESSARY,employment,payroll,0.97,0.83,0.6,LOW,HIGH,HIGH
+aadhaar_number,Driving Licence,0.99,UNNECESSARY,education,examination,0.91,0.88,0.45,HIGH,HIGH,HIGH
+gender,Marksheet,0.3,UNNECESSARY,travel,visa_application,0.95,0.8,0.65,LOW,LOW,MEDIUM
+gender,Identity Document,0.3,UNNECESSARY,employment,onboarding,0.78,0.91,0.6,LOW,MEDIUM,MEDIUM
+email_address,College ID,0.65,CONDITIONAL,healthcare,hospital_registration,0.69,0.8,0.75,LOW,LOW,MEDIUM
+pin_code,College ID,0.55,CONDITIONAL,employment,payroll,0.72,0.83,0.6,LOW,MEDIUM,MEDIUM
+pan_number,Passport,0.95,CONDITIONAL,employment,payroll,0.88,0.67,0.6,HIGH,HIGH,HIGH
+address,Marksheet,0.65,CONDITIONAL,healthcare,insurance_claim,0.62,0.93,0.75,MEDIUM,MEDIUM,MEDIUM
+address,Aadhaar Card,0.65,CONDITIONAL,legal,legal_verification,0.6,0.77,0.8,MEDIUM,MEDIUM,MEDIUM
+ifsc_code,Bank Statement,0.5,UNNECESSARY,government,subsidy,0.89,0.92,0.7,LOW,LOW,MEDIUM
+bank_account_number,Identity Document,0.95,CONDITIONAL,employment,payroll,0.61,0.76,0.6,HIGH,MEDIUM,HIGH
+email_address,Bank Statement,0.65,CONDITIONAL,employment,onboarding,0.98,0.83,0.6,LOW,HIGH,HIGH
+address,Aadhaar Card,0.65,UNNECESSARY,education,financial_aid,0.65,0.81,0.45,MEDIUM,MEDIUM,HIGH
+aadhaar_number,College ID,0.99,CONDITIONAL,government,government_service,0.73,0.91,0.7,HIGH,MEDIUM,HIGH
+address,College ID,0.65,CONDITIONAL,government,subsidy,0.78,0.9,0.7,MEDIUM,HIGH,HIGH
+aadhaar_number,Marksheet,0.99,UNNECESSARY,employment,payroll,0.9,0.87,0.6,HIGH,HIGH,HIGH
+ifsc_code,Aadhaar Card,0.5,REQUIRED,employment,payroll,0.84,0.73,0.6,LOW,HIGH,MEDIUM
+person_name,PAN Card,0.35,CONDITIONAL,legal,legal_verification,0.87,0.91,0.8,HIGH,MEDIUM,MEDIUM
+pan_number,PAN Card,0.95,REQUIRED,employment,onboarding,0.83,0.97,0.6,HIGH,HIGH,HIGH
+qr_code,Bank Statement,0.98,CONDITIONAL,government,government_service,0.63,0.88,0.7,LOW,HIGH,HIGH
+email_address,Driving Licence,0.65,UNNECESSARY,education,examination,0.93,0.85,0.45,LOW,MEDIUM,HIGH
+vid,Aadhaar Card,0.99,UNNECESSARY,banking,credit_verification,0.86,0.67,0.85,LOW,HIGH,HIGH
+email_address,Marksheet,0.65,CONDITIONAL,education,college_admission,0.64,0.98,0.45,LOW,MEDIUM,MEDIUM
+email_address,Identity Document,0.65,CONDITIONAL,employment,job_application,0.89,0.98,0.6,LOW,HIGH,HIGH
+mobile_number,Identity Document,0.75,CONDITIONAL,travel,visa_application,0.83,0.76,0.65,LOW,LOW,MEDIUM
+bank_account_number,PAN Card,0.95,REQUIRED,banking,bank_account_opening,0.89,0.84,0.85,HIGH,HIGH,HIGH
+email_address,Bank Statement,0.65,REQUIRED,banking,loan_application,0.93,0.71,0.85,LOW,MEDIUM,MEDIUM
+bank_account_number,Marksheet,0.95,CONDITIONAL,banking,bank_account_opening,0.87,0.74,0.85,HIGH,LOW,HIGH
+aadhaar_number,Driving Licence,0.99,CONDITIONAL,education,financial_aid,0.79,0.91,0.45,HIGH,MEDIUM,HIGH
+pin_code,Identity Document,0.55,UNNECESSARY,general,unknown,0.77,0.66,0.5,LOW,MEDIUM,MEDIUM
+mobile_number,Driving Licence,0.75,UNNECESSARY,government,government_service,0.69,0.88,0.7,LOW,HIGH,HIGH
+date_of_birth,Identity Document,0.7,UNNECESSARY,healthcare,insurance_claim,0.73,0.99,0.75,MEDIUM,HIGH,HIGH
+gender,Marksheet,0.3,UNNECESSARY,banking,credit_verification,0.71,0.74,0.85,LOW,MEDIUM,MEDIUM
+vid,Driving Licence,0.99,UNNECESSARY,banking,loan_application,0.81,0.91,0.85,LOW,HIGH,HIGH
+pan_number,Driving Licence,0.95,UNNECESSARY,employment,background_verification,0.71,0.85,0.6,HIGH,HIGH,HIGH
+ifsc_code,College ID,0.5,REQUIRED,education,examination,0.69,0.71,0.45,LOW,MEDIUM,LOW
+aadhaar_number,Passport,0.99,CONDITIONAL,banking,bank_account_opening,0.82,0.89,0.85,HIGH,HIGH,HIGH
+pan_number,Identity Document,0.95,REQUIRED,education,examination,0.71,0.81,0.45,HIGH,LOW,MEDIUM
+date_of_birth,Passport,0.7,CONDITIONAL,education,scholarship,0.64,0.67,0.45,MEDIUM,MEDIUM,MEDIUM
+person_name,PAN Card,0.35,REQUIRED,legal,legal_verification,0.66,0.93,0.8,HIGH,HIGH,MEDIUM
+mobile_number,PAN Card,0.75,REQUIRED,employment,payroll,0.9,0.86,0.6,LOW,LOW,MEDIUM
+ifsc_code,Driving Licence,0.5,CONDITIONAL,healthcare,hospital_registration,0.95,0.75,0.75,LOW,MEDIUM,MEDIUM
+qr_code,Bank Statement,0.98,UNNECESSARY,banking,kyc,0.62,0.98,0.85,LOW,HIGH,HIGH
+vid,Driving Licence,0.99,UNNECESSARY,general,unknown,0.86,0.7,0.5,LOW,HIGH,HIGH
+pan_number,PAN Card,0.95,CONDITIONAL,employment,onboarding,0.87,0.81,0.6,HIGH,MEDIUM,HIGH
+aadhaar_number,Driving Licence,0.99,UNNECESSARY,banking,kyc,0.87,0.8,0.85,HIGH,HIGH,HIGH
+email_address,Driving Licence,0.65,UNNECESSARY,banking,bank_account_opening,0.86,0.97,0.85,LOW,LOW,HIGH
+address,PAN Card,0.65,REQUIRED,healthcare,insurance_claim,0.66,0.74,0.75,MEDIUM,LOW,MEDIUM
+pan_number,PAN Card,0.95,CONDITIONAL,education,scholarship,0.83,0.93,0.45,HIGH,MEDIUM,HIGH
+mobile_number,Identity Document,0.75,CONDITIONAL,education,examination,0.72,0.79,0.45,LOW,LOW,MEDIUM
+mobile_number,Identity Document,0.75,REQUIRED,travel,visa_application,0.62,0.8,0.65,LOW,LOW,MEDIUM
+date_of_birth,College ID,0.7,REQUIRED,education,college_admission,0.98,0.93,0.45,MEDIUM,HIGH,MEDIUM
+qr_code,Aadhaar Card,0.98,UNNECESSARY,banking,bank_account_opening,0.9,0.71,0.85,LOW,HIGH,HIGH
+gender,Identity Document,0.3,REQUIRED,banking,bank_account_opening,0.77,0.93,0.85,LOW,LOW,LOW
+vid,Identity Document,0.99,UNNECESSARY,banking,credit_verification,0.73,0.69,0.85,LOW,HIGH,HIGH
+pan_number,Marksheet,0.95,UNNECESSARY,government,subsidy,0.71,0.97,0.7,HIGH,HIGH,HIGH
+ifsc_code,Aadhaar Card,0.5,REQUIRED,travel,visa_application,0.7,0.69,0.65,LOW,MEDIUM,LOW
+ifsc_code,Bank Statement,0.5,REQUIRED,healthcare,hospital_registration,0.94,0.81,0.75,LOW,LOW,LOW
+aadhaar_number,Driving Licence,0.99,CONDITIONAL,healthcare,hospital_registration,0.84,0.91,0.75,HIGH,MEDIUM,HIGH
+bank_account_number,College ID,0.95,CONDITIONAL,healthcare,insurance_claim,0.77,0.89,0.75,HIGH,MEDIUM,HIGH
+vid,Aadhaar Card,0.99,UNNECESSARY,general,unknown,0.69,0.7,0.5,LOW,HIGH,HIGH
+gender,Aadhaar Card,0.3,CONDITIONAL,healthcare,insurance_claim,0.69,0.94,0.75,LOW,HIGH,MEDIUM
+vid,Identity Document,0.99,UNNECESSARY,education,examination,0.66,0.97,0.45,LOW,HIGH,HIGH
+mobile_number,College ID,0.75,CONDITIONAL,government,subsidy,0.7,0.84,0.7,LOW,MEDIUM,HIGH
+address,Driving Licence,0.65,UNNECESSARY,general,identity_verification,0.94,0.94,0.5,MEDIUM,LOW,MEDIUM
+mobile_number,Bank Statement,0.75,UNNECESSARY,banking,loan_application,0.7,0.65,0.85,LOW,HIGH,HIGH
+pin_code,College ID,0.55,UNNECESSARY,legal,legal_verification,0.79,0.7,0.8,LOW,LOW,MEDIUM
+gender,Identity Document,0.3,CONDITIONAL,banking,credit_verification,0.9,0.78,0.85,LOW,LOW,MEDIUM
+date_of_birth,Driving Licence,0.7,UNNECESSARY,employment,payroll,0.75,0.94,0.6,MEDIUM,HIGH,HIGH
+address,Aadhaar Card,0.65,UNNECESSARY,banking,loan_application,0.88,0.93,0.85,MEDIUM,MEDIUM,HIGH
+address,Passport,0.65,REQUIRED,travel,passport_application,0.8,0.85,0.65,MEDIUM,HIGH,MEDIUM
+vid,Identity Document,0.99,UNNECESSARY,education,examination,0.78,0.9,0.45,LOW,HIGH,HIGH
+address,Passport,0.65,CONDITIONAL,education,financial_aid,0.73,0.89,0.45,MEDIUM,MEDIUM,MEDIUM
+email_address,PAN Card,0.65,UNNECESSARY,banking,loan_application,0.75,0.76,0.85,LOW,LOW,HIGH
+pin_code,Identity Document,0.55,REQUIRED,healthcare,insurance_claim,0.63,0.86,0.75,LOW,LOW,LOW
+mobile_number,Driving Licence,0.75,CONDITIONAL,education,financial_aid,0.9,0.89,0.45,LOW,HIGH,HIGH
+vid,Identity Document,0.99,UNNECESSARY,employment,onboarding,0.95,0.67,0.6,LOW,HIGH,HIGH
+ifsc_code,Aadhaar Card,0.5,CONDITIONAL,banking,kyc,0.77,0.73,0.85,LOW,MEDIUM,MEDIUM
+address,Passport,0.65,REQUIRED,employment,onboarding,0.84,0.78,0.6,MEDIUM,HIGH,MEDIUM
+email_address,Driving Licence,0.65,UNNECESSARY,travel,passport_application,0.69,0.87,0.65,LOW,HIGH,HIGH
+person_name,College ID,0.35,CONDITIONAL,education,college_admission,0.95,0.88,0.45,HIGH,MEDIUM,MEDIUM
+pan_number,PAN Card,0.95,REQUIRED,travel,visa_application,0.72,0.98,0.65,HIGH,LOW,MEDIUM
+pin_code,College ID,0.55,CONDITIONAL,travel,visa_application,0.99,0.94,0.65,LOW,HIGH,MEDIUM
+vid,Driving Licence,0.99,UNNECESSARY,government,government_service,0.82,0.99,0.7,LOW,HIGH,HIGH
+mobile_number,Aadhaar Card,0.75,CONDITIONAL,government,government_service,0.82,0.88,0.7,LOW,HIGH,HIGH
+pin_code,Aadhaar Card,0.55,UNNECESSARY,general,identity_verification,0.92,0.96,0.5,LOW,MEDIUM,MEDIUM
+ifsc_code,Driving Licence,0.5,CONDITIONAL,general,identity_verification,0.85,0.86,0.5,LOW,HIGH,MEDIUM
+email_address,Passport,0.65,REQUIRED,general,unknown,0.85,0.76,0.5,LOW,LOW,LOW
+person_name,Aadhaar Card,0.35,REQUIRED,legal,legal_verification,0.64,0.75,0.8,HIGH,HIGH,MEDIUM
+pin_code,Bank Statement,0.55,REQUIRED,employment,onboarding,0.91,0.95,0.6,LOW,HIGH,MEDIUM
+date_of_birth,College ID,0.7,CONDITIONAL,employment,onboarding,0.98,0.75,0.6,MEDIUM,MEDIUM,MEDIUM
+date_of_birth,PAN Card,0.7,REQUIRED,travel,visa_application,0.89,0.73,0.65,MEDIUM,HIGH,MEDIUM
+email_address,Bank Statement,0.65,CONDITIONAL,healthcare,insurance_claim,0.91,0.65,0.75,LOW,HIGH,HIGH
+gender,PAN Card,0.3,CONDITIONAL,travel,visa_application,0.89,0.74,0.65,LOW,LOW,LOW
+address,Marksheet,0.65,UNNECESSARY,education,examination,0.78,0.86,0.45,MEDIUM,HIGH,HIGH
+gender,Marksheet,0.3,REQUIRED,general,identity_verification,0.62,0.93,0.5,LOW,LOW,LOW
+pin_code,College ID,0.55,CONDITIONAL,general,unknown,0.65,0.97,0.5,LOW,HIGH,MEDIUM
+mobile_number,Identity Document,0.75,REQUIRED,education,examination,0.95,0.7,0.45,LOW,HIGH,MEDIUM
+person_name,Marksheet,0.35,REQUIRED,healthcare,insurance_claim,0.88,0.95,0.75,HIGH,LOW,LOW
+email_address,PAN Card,0.65,UNNECESSARY,travel,passport_application,0.97,0.75,0.65,LOW,MEDIUM,HIGH
+pin_code,Marksheet,0.55,CONDITIONAL,employment,background_verification,0.97,0.94,0.6,LOW,MEDIUM,MEDIUM
+vid,Marksheet,0.99,CONDITIONAL,healthcare,insurance_claim,0.74,0.79,0.75,LOW,LOW,HIGH
+bank_account_number,PAN Card,0.95,CONDITIONAL,travel,visa_application,0.85,0.85,0.65,HIGH,HIGH,HIGH
+aadhaar_number,Aadhaar Card,0.99,CONDITIONAL,banking,loan_application,0.91,0.72,0.85,HIGH,HIGH,HIGH
+ifsc_code,Driving Licence,0.5,REQUIRED,legal,legal_verification,0.73,0.7,0.8,LOW,HIGH,MEDIUM
+qr_code,Aadhaar Card,0.98,CONDITIONAL,banking,bank_account_opening,0.99,0.83,0.85,LOW,HIGH,HIGH
+ifsc_code,Passport,0.5,UNNECESSARY,education,examination,0.65,0.77,0.45,LOW,HIGH,HIGH
+ifsc_code,Driving Licence,0.5,CONDITIONAL,legal,legal_verification,0.67,0.67,0.8,LOW,HIGH,MEDIUM
+pin_code,Bank Statement,0.55,REQUIRED,healthcare,hospital_registration,0.62,0.8,0.75,LOW,LOW,LOW
+date_of_birth,PAN Card,0.7,UNNECESSARY,travel,visa_application,0.69,0.86,0.65,MEDIUM,HIGH,HIGH
+pin_code,College ID,0.55,UNNECESSARY,travel,visa_application,0.62,0.81,0.65,LOW,HIGH,HIGH
+address,Bank Statement,0.65,CONDITIONAL,education,examination,0.95,0.67,0.45,MEDIUM,LOW,MEDIUM
+vid,Marksheet,0.99,UNNECESSARY,general,identity_verification,0.65,0.86,0.5,LOW,HIGH,HIGH
+qr_code,Marksheet,0.98,CONDITIONAL,government,government_service,0.72,0.82,0.7,LOW,LOW,HIGH
+address,PAN Card,0.65,UNNECESSARY,education,examination,0.94,0.84,0.45,MEDIUM,LOW,MEDIUM
+bank_account_number,Bank Statement,0.95,REQUIRED,travel,visa_application,0.73,0.8,0.65,HIGH,MEDIUM,MEDIUM
+address,PAN Card,0.65,CONDITIONAL,banking,loan_application,0.86,0.78,0.85,MEDIUM,MEDIUM,MEDIUM
+pan_number,Identity Document,0.95,CONDITIONAL,education,financial_aid,0.64,0.68,0.45,HIGH,HIGH,HIGH
+pin_code,Marksheet,0.55,UNNECESSARY,employment,job_application,0.83,0.84,0.6,LOW,HIGH,HIGH
+date_of_birth,PAN Card,0.7,CONDITIONAL,government,subsidy,0.97,0.79,0.7,MEDIUM,LOW,MEDIUM
+pin_code,Aadhaar Card,0.55,UNNECESSARY,banking,kyc,0.74,0.85,0.85,LOW,MEDIUM,HIGH
+bank_account_number,Passport,0.95,CONDITIONAL,travel,passport_application,0.74,0.84,0.65,HIGH,HIGH,HIGH
+vid,College ID,0.99,UNNECESSARY,legal,legal_verification,0.77,0.84,0.8,LOW,HIGH,HIGH
+ifsc_code,Aadhaar Card,0.5,UNNECESSARY,general,identity_verification,0.7,0.71,0.5,LOW,LOW,MEDIUM
+pin_code,College ID,0.55,CONDITIONAL,banking,loan_application,0.67,0.7,0.85,LOW,HIGH,HIGH
+email_address,Bank Statement,0.65,REQUIRED,education,financial_aid,0.85,0.66,0.45,LOW,LOW,LOW
+pin_code,Driving Licence,0.55,CONDITIONAL,government,government_service,0.73,0.78,0.7,LOW,MEDIUM,MEDIUM
+pin_code,Marksheet,0.55,UNNECESSARY,legal,legal_verification,0.94,0.7,0.8,LOW,HIGH,HIGH
+ifsc_code,Aadhaar Card,0.5,CONDITIONAL,education,financial_aid,0.86,0.82,0.45,LOW,MEDIUM,MEDIUM
+person_name,Bank Statement,0.35,REQUIRED,banking,bank_account_opening,0.64,0.8,0.85,HIGH,LOW,LOW
+mobile_number,Identity Document,0.75,UNNECESSARY,healthcare,hospital_registration,0.72,0.72,0.75,LOW,HIGH,HIGH
+qr_code,Aadhaar Card,0.98,UNNECESSARY,education,college_admission,0.97,0.91,0.45,LOW,HIGH,HIGH
+ifsc_code,College ID,0.5,CONDITIONAL,banking,kyc,0.6,0.9,0.85,LOW,HIGH,MEDIUM
+pan_number,Passport,0.95,UNNECESSARY,government,government_service,0.69,0.84,0.7,HIGH,HIGH,HIGH
+email_address,Marksheet,0.65,CONDITIONAL,education,financial_aid,0.62,0.66,0.45,LOW,LOW,MEDIUM
+vid,Marksheet,0.99,UNNECESSARY,legal,legal_verification,0.76,0.87,0.8,LOW,HIGH,HIGH
+mobile_number,PAN Card,0.75,REQUIRED,government,government_service,0.67,0.97,0.7,LOW,MEDIUM,MEDIUM
+person_name,Marksheet,0.35,REQUIRED,education,financial_aid,0.69,0.85,0.45,HIGH,HIGH,LOW
+gender,PAN Card,0.3,CONDITIONAL,government,government_service,0.73,0.76,0.7,LOW,LOW,LOW
+pan_number,PAN Card,0.95,UNNECESSARY,healthcare,hospital_registration,0.81,0.72,0.75,HIGH,HIGH,HIGH
+ifsc_code,Marksheet,0.5,UNNECESSARY,banking,credit_verification,0.92,0.73,0.85,LOW,LOW,MEDIUM
+pan_number,College ID,0.95,CONDITIONAL,employment,background_verification,0.9,0.87,0.6,HIGH,HIGH,HIGH
+pan_number,Identity Document,0.95,UNNECESSARY,travel,visa_application,0.9,0.8,0.65,HIGH,HIGH,HIGH
+qr_code,Marksheet,0.98,UNNECESSARY,general,unknown,0.77,0.81,0.5,LOW,HIGH,HIGH
+email_address,College ID,0.65,UNNECESSARY,banking,bank_account_opening,0.74,0.68,0.85,LOW,HIGH,HIGH
+person_name,Identity Document,0.35,REQUIRED,education,scholarship,0.63,0.94,0.45,HIGH,MEDIUM,LOW
+vid,Bank Statement,0.99,UNNECESSARY,travel,visa_application,0.97,0.9,0.65,LOW,HIGH,HIGH
+aadhaar_number,Identity Document,0.99,UNNECESSARY,legal,legal_verification,0.73,0.81,0.8,HIGH,HIGH,HIGH
+pan_number,Aadhaar Card,0.95,CONDITIONAL,travel,visa_application,0.98,0.68,0.65,HIGH,MEDIUM,HIGH
+email_address,Passport,0.65,REQUIRED,education,scholarship,0.77,0.8,0.45,LOW,LOW,LOW
+gender,Passport,0.3,CONDITIONAL,banking,credit_verification,0.75,0.91,0.85,LOW,MEDIUM,MEDIUM
+email_address,Aadhaar Card,0.65,UNNECESSARY,general,unknown,0.63,0.68,0.5,LOW,MEDIUM,HIGH
+email_address,Bank Statement,0.65,CONDITIONAL,banking,kyc,0.93,0.98,0.85,LOW,LOW,MEDIUM
+qr_code,Passport,0.98,UNNECESSARY,banking,loan_application,0.86,0.96,0.85,LOW,HIGH,HIGH
+mobile_number,Bank Statement,0.75,UNNECESSARY,employment,job_application,0.88,0.68,0.6,LOW,HIGH,HIGH
+gender,Bank Statement,0.3,CONDITIONAL,general,unknown,0.86,0.93,0.5,LOW,HIGH,MEDIUM
+pin_code,PAN Card,0.55,UNNECESSARY,general,unknown,0.8,0.66,0.5,LOW,MEDIUM,MEDIUM
+mobile_number,Passport,0.75,CONDITIONAL,employment,background_verification,0.67,0.99,0.6,LOW,MEDIUM,MEDIUM
+pan_number,PAN Card,0.95,REQUIRED,banking,kyc,0.8,0.83,0.85,HIGH,HIGH,HIGH
+pin_code,Aadhaar Card,0.55,UNNECESSARY,banking,loan_application,0.83,0.7,0.85,LOW,HIGH,HIGH
+pan_number,Passport,0.95,CONDITIONAL,travel,visa_application,0.86,0.73,0.65,HIGH,MEDIUM,HIGH
+person_name,College ID,0.35,REQUIRED,travel,visa_application,0.72,0.92,0.65,HIGH,HIGH,LOW
+person_name,Driving Licence,0.35,REQUIRED,banking,credit_verification,0.98,0.81,0.85,HIGH,LOW,LOW
+mobile_number,Bank Statement,0.75,UNNECESSARY,healthcare,hospital_registration,0.76,0.71,0.75,LOW,HIGH,HIGH
+bank_account_number,Passport,0.95,CONDITIONAL,banking,bank_account_opening,0.94,0.84,0.85,HIGH,MEDIUM,HIGH
+vid,PAN Card,0.99,UNNECESSARY,banking,kyc,0.66,0.8,0.85,LOW,HIGH,HIGH
+gender,Passport,0.3,REQUIRED,government,subsidy,0.92,0.95,0.7,LOW,HIGH,LOW
+aadhaar_number,Bank Statement,0.99,CONDITIONAL,education,scholarship,0.69,0.99,0.45,HIGH,MEDIUM,HIGH
+date_of_birth,Driving Licence,0.7,CONDITIONAL,education,college_admission,0.93,0.87,0.45,MEDIUM,HIGH,HIGH
+ifsc_code,Passport,0.5,REQUIRED,employment,job_application,0.96,0.81,0.6,LOW,MEDIUM,LOW
+pan_number,Identity Document,0.95,UNNECESSARY,travel,visa_application,0.95,0.66,0.65,HIGH,HIGH,HIGH
+bank_account_number,Passport,0.95,REQUIRED,healthcare,insurance_claim,0.81,0.69,0.75,HIGH,LOW,MEDIUM
+mobile_number,Driving Licence,0.75,REQUIRED,banking,kyc,0.69,0.87,0.85,LOW,HIGH,MEDIUM
+qr_code,Identity Document,0.98,UNNECESSARY,education,financial_aid,0.95,0.85,0.45,LOW,HIGH,HIGH

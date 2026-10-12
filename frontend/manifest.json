@@ -1,0 +1,19 @@
+{
+  "name": "InfoShield — Secure Document Submission Assistant",
+  "short_name": "InfoShield",
+  "description": "Purpose-Based PII Exposure Prevention & Secure Document Sharing Platform",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#ffffff",
+  "theme_color": "#0284c7",
+  "icons": [
+    {
+      "src": "assets/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="shieldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0284c7" />
+      <stop offset="100%" stop-color="#0369a1" />
+    </linearGradient>
+  </defs>
+  <!-- Background Rounded Rect -->
+  <rect width="512" height="512" rx="112" fill="url(#shieldGrad)" />
+  <!-- Shield Outline -->
+  <path d="M256 96L376 144V260C376 338 325 400 256 424C187 400 136 338 136 260V144L256 96Z" fill="#ffffff" fill-opacity="0.15" stroke="#ffffff" stroke-width="20" stroke-linejoin="round"/>
+  <!-- Lock Symbol Inside Shield -->
+  <rect x="208" y="248" width="96" height="80" rx="16" fill="#ffffff" />
+  <path d="M228 248V204C228 188.5 240.5 176 256 176C271.5 176 284 188.5 284 204V248" fill="none" stroke="#ffffff" stroke-width="18" stroke-linecap="round"/>
+  <!-- Keyhole -->
+  <circle cx="256" cy="282" r="8" fill="#0284c7" />
+  <path d="M256 290V306" stroke="#0284c7" stroke-width="8" stroke-linecap="round" />
+</svg>
