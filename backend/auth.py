@@ -112,14 +112,19 @@ async def get_current_user(
         logger.warning("Auth disabled in dev mode — using demo user")
         return AuthenticatedUser(user_id=demo_id, email="demo@infoshield.local", role="demo")
 
-    if not credentials or not credentials.credentials:
+    token = None
+    if credentials and credentials.credentials:
+        token = credentials.credentials
+    elif "token" in request.query_params:
+        token = request.query_params.get("token")
+
+    if not token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Authentication required. Please sign in.",
             headers={"WWW-Authenticate": "Bearer"}
         )
 
-    token = credentials.credentials
     claims = _verify_jwt(token)
 
     user_id = claims.get("sub")

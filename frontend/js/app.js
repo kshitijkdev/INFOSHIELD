@@ -1112,7 +1112,9 @@
 
     // 2. Display Protected Document from Server
     if (data && data.document && data.document.protected_url && protImg) {
-      const fullProtectedUrl = `${BACKEND_BASE_URL}${data.document.protected_url}`;
+      const authToken = localStorage.getItem('infoshield_auth_token');
+      const tokenQuery = authToken ? `?token=${encodeURIComponent(authToken)}` : '';
+      const fullProtectedUrl = `${BACKEND_BASE_URL}${data.document.protected_url}${tokenQuery}`;
       if (protPlaceholder) {
         protPlaceholder.style.display = 'flex';
         protPlaceholder.innerHTML = `
