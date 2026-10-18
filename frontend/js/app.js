@@ -1605,10 +1605,13 @@
     const settingAuditBtn = document.getElementById('settingAuditBtn');
     const settingSignOutBtn = document.getElementById('settingSignOutBtn');
     const saveAuthTokenBtn = document.getElementById('saveAuthTokenBtn');
+    const loadDemoTokenBtn = document.getElementById('loadDemoTokenBtn');
     const authTokenInput = document.getElementById('authTokenInput');
     const authStatusText = document.getElementById('authStatusText');
     const profileDisplayEmail = document.getElementById('profileDisplayEmail');
     const profileDisplayName = document.getElementById('profileDisplayName');
+
+    const DEMO_JWT_TOKEN = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIwMDAwMDAwMC0wMDAwLTAwMDAtMDAwMC0wMDAwMDAwMDAwMDEiLCJlbWFpbCI6ImFhcmF2LnNoYXJtYUBleGFtcGxlLmNvbSIsInJvbGUiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjoxODIzODc5MzA1LCJpYXQiOjE3OTIzNDMzMDUsImF1ZCI6ImF1dGhlbnRpY2F0ZWQifQ.rXlwO6dX4RNNjhz5A-CsbBpXKO2cBhP0AWccct0QlFI';
 
     function updateAuthUI() {
       const token = localStorage.getItem('infoshield_auth_token');
@@ -1624,19 +1627,38 @@
           }
         } catch (_) {}
       } else {
-        if (authStatusText) authStatusText.textContent = 'Status: Using local/demo credentials';
+        if (authStatusText) authStatusText.textContent = 'Status: No token active';
         if (profileDisplayEmail) profileDisplayEmail.textContent = 'aarav.sharma@example.com';
         if (profileDisplayName) profileDisplayName.textContent = 'Aarav Sharma';
       }
     }
 
+    // Auto-initialize demo token if empty
+    if (!localStorage.getItem('infoshield_auth_token')) {
+      localStorage.setItem('infoshield_auth_token', DEMO_JWT_TOKEN);
+    }
+
     updateAuthUI();
+
+    if (loadDemoTokenBtn) {
+      loadDemoTokenBtn.onclick = () => {
+        localStorage.setItem('infoshield_auth_token', DEMO_JWT_TOKEN);
+        if (authTokenInput) authTokenInput.value = '';
+        updateAuthUI();
+        showToast('Signed in with configured Demo JWT Token.');
+        loadHistoryFromBackend();
+      };
+    }
 
     if (saveAuthTokenBtn && authTokenInput) {
       saveAuthTokenBtn.onclick = () => {
         const val = authTokenInput.value.trim();
         if (!val) {
           showToast('Please paste a valid JWT token.');
+          return;
+        }
+        if (val.split('.').length !== 3) {
+          showToast('Invalid format. A JWT has 3 parts separated by dots.');
           return;
         }
         localStorage.setItem('infoshield_auth_token', val);
