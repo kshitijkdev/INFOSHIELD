@@ -1652,7 +1652,15 @@
 
     if (saveAuthTokenBtn && authTokenInput) {
       saveAuthTokenBtn.onclick = () => {
-        const val = authTokenInput.value.trim();
+        let val = authTokenInput.value.trim();
+        // Remove quotes if user copied token with surrounding quotes
+        if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+          val = val.slice(1, -1).trim();
+        }
+        // Remove 'Bearer ' prefix if user pasted 'Bearer ey...'
+        if (val.toLowerCase().startsWith('bearer ')) {
+          val = val.slice(7).trim();
+        }
         if (!val) {
           showToast('Please paste a valid JWT token.');
           return;

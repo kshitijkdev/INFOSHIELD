@@ -48,6 +48,11 @@ def _verify_jwt(token: str) -> Dict[str, Any]:
             detail="Authentication is not configured. Set SUPABASE_JWT_SECRET."
         )
 
+    # Clean token (strip potential whitespace or duplicate Bearer prefix)
+    token = token.strip()
+    if token.lower().startswith("bearer "):
+        token = token[7:].strip()
+
     try:
         import jwt as pyjwt
     except ImportError:
@@ -77,7 +82,7 @@ def _verify_jwt(token: str) -> Dict[str, Any]:
             headers={"WWW-Authenticate": "Bearer"}
         )
     except pyjwt.InvalidTokenError as e:
-        logger.warning(f"Invalid JWT token: {type(e).__name__}")
+        logger.warning(f"Invalid JWT token: {type(e).__name__} (token length={len(token)}, prefix={token[:15]}...)")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid authentication token.",
