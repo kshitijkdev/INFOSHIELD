@@ -199,11 +199,14 @@ def test_api_protect_intelligence_block():
         "The college needs it to verify my identity and process my financial assistance application."
     )
     
+    from conftest import get_test_auth_headers
+
     with open(TEST_DOC_PATH, "rb") as f:
         response = client.post(
             "/api/protect",
             files={"file": ("test_document.png", f, "image/png")},
-            data={"purpose": purpose_text}
+            data={"purpose": purpose_text},
+            headers=get_test_auth_headers()
         )
     
     assert response.status_code == 200, f"Protect request failed: {response.text}"
