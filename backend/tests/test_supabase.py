@@ -31,16 +31,39 @@ if sys.platform == "win32":
     except Exception:
         pass
 
+import time
+import jwt as pyjwt
 import supabase_client
 from supabase_service import get_db_service, SupabaseService
 from api import app
 
 client = TestClient(app)
 
+TEST_JWT_SECRET = "test-secret-key-for-infoshield-testing-purposes-only-32bytes"
+DEMO_USER_ID = "00000000-0000-0000-0000-000000000001"
+
+
+def get_test_auth_headers(user_id: str = DEMO_USER_ID, role: str = "authenticated") -> dict:
+    """Generate valid test JWT auth headers."""
+    payload = {
+        "sub": user_id,
+        "email": "demo.user@infoshield.ai",
+        "role": role,
+        "aud": "authenticated",
+        "exp": time.time() + 3600,
+        "iat": time.time()
+    }
+    token = pyjwt.encode(payload, TEST_JWT_SECRET, algorithm="HS256")
+    return {"Authorization": f"Bearer {token}"}
+
+
+AUTH_HEADERS = get_test_auth_headers()
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 if not os.path.isdir(os.path.join(BASE_DIR, "test_images")):
     BASE_DIR = os.path.dirname(BASE_DIR)
 TEST_IMAGE_PATH = os.path.join(BASE_DIR, "test_images", "test_document.png")
+
 
 
 # ==============================================================================
@@ -429,7 +452,7 @@ def test_document_history_endpoint(setup_mock_db):
         "created_at": "2026-10-06T00:00:00Z"
     })
 
-    resp = client.get(f"/api/documents/{doc_id}")
+    resp = client.get(f"/api/documents/{doc_id}", headers=AUTH_HEADERS)
     assert resp.status_code == 200
     data = resp.json()
     assert data["success"] is True
@@ -451,7 +474,7 @@ def test_user_documents_endpoint(setup_mock_db):
         "updated_at": "2026-10-06T00:00:00Z"
     })
 
-    resp = client.get(f"/api/users/{user_id}/documents")
+    resp = client.get(f"/api/users/{user_id}/documents", headers=AUTH_HEADERS)
     assert resp.status_code == 200
     data = resp.json()
     assert data["success"] is True
@@ -461,6 +484,16 @@ def test_user_documents_endpoint(setup_mock_db):
 
 def test_audit_endpoint(setup_mock_db):
     doc_id = str(uuid.uuid4())
+    # Register document under the requesting user so ownership check passes
+    setup_mock_db.store["documents"].append({
+        "id": doc_id,
+        "user_id": "00000000-0000-0000-0000-000000000001",
+        "original_filename": "audit_doc.png",
+        "document_type": "Aadhaar Card",
+        "mime_type": "image/png",
+        "status": "PROTECTED",
+        "created_at": "2026-10-06T00:00:00Z"
+    })
     db_service = get_db_service()
     db_service.create_audit_log(
         user_id="00000000-0000-0000-0000-000000000001",
@@ -473,7 +506,7 @@ def test_audit_endpoint(setup_mock_db):
         action="DOCUMENT_PROTECTED"
     )
 
-    resp = client.get(f"/api/documents/{doc_id}/audit")
+    resp = client.get(f"/api/documents/{doc_id}/audit", headers=AUTH_HEADERS)
     assert resp.status_code == 200
     events = resp.json()
     assert isinstance(events, list)
@@ -494,7 +527,8 @@ def test_api_protect_with_database_persistence(setup_mock_db):
         resp = client.post(
             "/api/protect",
             files={"file": ("test_document.png", f, "image/png")},
-            data={"purpose": purpose}
+            data={"purpose": purpose},
+            headers=AUTH_HEADERS
         )
 
     assert resp.status_code == 200
@@ -530,7 +564,8 @@ def test_api_protect_graceful_fallback_when_db_unavailable():
         resp = client.post(
             "/api/protect",
             files={"file": ("test_document.png", f, "image/png")},
-            data={"purpose": purpose}
+            data={"purpose": purpose},
+            headers=AUTH_HEADERS
         )
 
     # Core document protection must NOT fail even if DB is unavailable
@@ -541,3 +576,4 @@ def test_api_protect_graceful_fallback_when_db_unavailable():
     assert "database" in data
     # Database status is reported cleanly without breaking the response
     assert data["database"]["status"] in ["UNAVAILABLE", "CONNECTED"]
+

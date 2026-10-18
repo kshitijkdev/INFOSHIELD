@@ -11,39 +11,44 @@
   // Backend Configuration (Dynamic Resolution for Local & Cloud Deployments)
   // ---------------------------------------------------------------------------
   function getBackendBaseUrl() {
-    // 1. URL Query Parameter override (useful for immediate phone/laptop testing: ?backend=https://...)
-    try {
-      const urlParams = new URLSearchParams(window.location.search);
-      const queryBackend = urlParams.get('backend');
-      if (queryBackend) {
-        const clean = queryBackend.trim().replace(/\/+$/, '');
-        localStorage.setItem('infoshield_backend_url', clean);
-        return clean;
-      }
-    } catch (_) {}
-
-    // 2. Runtime configuration object from config.js (highest authority for configured deployment)
+    // 1. Runtime configuration object from config.js (HIGHEST authority for configured deployment)
     if (window.INFOSHIELD_CONFIG && typeof window.INFOSHIELD_CONFIG.BACKEND_URL === 'string') {
       const cfgUrl = window.INFOSHIELD_CONFIG.BACKEND_URL.trim();
       if (cfgUrl) {
+        // Clear any stale local storage override from past sessions to prevent redirection
+        try { localStorage.removeItem('infoshield_backend_url'); } catch (_) {}
         return cfgUrl.replace(/\/+$/, '');
       }
     }
 
-    // 3. LocalStorage override (fallback if config.js has no explicit URL)
-    try {
-      const stored = localStorage.getItem('infoshield_backend_url');
-      if (stored && stored.trim()) {
-        return stored.trim().replace(/\/+$/, '');
-      }
-    } catch (_) {}
+    const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
 
-    // 4. Default to localhost if accessed on local development host
-    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+    // 2. Strict Dev-only URL Query Parameter override
+    // NEVER permit in production or across untrusted domains
+    if (isLocalhost) {
+      try {
+        const urlParams = new URLSearchParams(window.location.search);
+        const queryBackend = urlParams.get('backend');
+        if (queryBackend) {
+          const parsed = new URL(queryBackend.trim());
+          const allowedHosts = ['localhost', '127.0.0.1'];
+          if (allowedHosts.includes(parsed.hostname) && (parsed.protocol === 'http:' || parsed.protocol === 'https:')) {
+            const clean = queryBackend.trim().replace(/\/+$/, '');
+            return clean;
+          }
+        }
+      } catch (_) {}
+    } else {
+      // In production, ensure no unauthenticated local storage backend overrides persist
+      try { localStorage.removeItem('infoshield_backend_url'); } catch (_) {}
+    }
+
+    // 3. Default to localhost if accessed on local development host
+    if (isLocalhost) {
       return 'http://127.0.0.1:8000';
     }
 
-    // 5. Default to empty string for same-origin reverse-proxy / Vercel rewrites
+    // 4. Default to empty string for same-origin reverse-proxy / Vercel rewrites (HTTPS in prod)
     return '';
   }
 
@@ -861,10 +866,18 @@
       formData.append('file', state.uploadedFile);
       formData.append('purpose', purpose);
 
+      const authToken = localStorage.getItem('infoshield_auth_token');
+      const headers = {};
+      if (authToken) {
+        headers['Authorization'] = `Bearer ${authToken}`;
+      }
+
       const response = await fetch(`${BACKEND_BASE_URL}/api/protect`, {
         method: 'POST',
+        headers: headers,
         body: formData
       });
+
 
       if (!response.ok) {
         let errMessage = 'Server error processing document.';
@@ -1270,9 +1283,15 @@
 
         try {
           showToast('Preparing download...');
-          const res = await fetch(downloadUrl);
+          const authToken = localStorage.getItem('infoshield_auth_token');
+          const headers = {};
+          if (authToken) {
+            headers['Authorization'] = `Bearer ${authToken}`;
+          }
+          const res = await fetch(downloadUrl, { headers });
           if (!res.ok) throw new Error(`HTTP ${res.status}`);
           const blob = await res.blob();
+
           const blobUrl = URL.createObjectURL(blob);
           const a = document.createElement('a');
           a.href = blobUrl;
@@ -1294,36 +1313,99 @@
       };
     }
 
-    // 8. Share Securely
+    // 8. Share Securely — Genuine Cryptographic Token Sharing Workflow
     if (shareDocBtn) {
-      shareDocBtn.onclick = async () => {
-        if (data && data.document && data.document.protected_url) {
-          let downloadUrl = `${BACKEND_BASE_URL}${data.document.protected_url}`;
-          if (!downloadUrl.startsWith('http')) {
-            downloadUrl = `${window.location.origin}${downloadUrl.startsWith('/') ? '' : '/'}${downloadUrl}`;
-          }
-          if (navigator.share) {
-            try {
-              await navigator.share({
-                title: 'InfoShield Protected Document',
-                text: `Purpose-verified protected document (${data.document.type || 'Identity Document'}).`,
-                url: downloadUrl
-              });
-              showToast('Document shared successfully.');
-            } catch (err) {
-              if (err.name !== 'AbortError') {
-                showToast('Sharing was cancelled.');
+      shareDocBtn.onclick = () => {
+        if (!data || !data.document) {
+          showToast('No protected document available to share.');
+          return;
+        }
+
+        const modal = document.getElementById('shareModal');
+        const shareResultArea = document.getElementById('shareResultArea');
+        const shareGeneratedUrl = document.getElementById('shareGeneratedUrl');
+        const shareForm = document.getElementById('shareDocumentForm');
+        const recipientInput = document.getElementById('shareRecipientEmail');
+        const expirySelect = document.getElementById('shareExpiryHours');
+        const maxAccessSelect = document.getElementById('shareMaxAccess');
+        const closeBtn = document.getElementById('closeShareModalBtn');
+        const cancelBtn = document.getElementById('cancelShareBtn');
+        const copyBtn = document.getElementById('copyShareLinkBtn');
+
+        if (!modal) {
+          showToast('Secure sharing dialog unavailable.');
+          return;
+        }
+
+        modal.style.display = 'flex';
+        if (shareResultArea) shareResultArea.style.display = 'none';
+        if (shareGeneratedUrl) shareGeneratedUrl.value = '';
+
+        closeBtn.onclick = () => { modal.style.display = 'none'; };
+        cancelBtn.onclick = () => { modal.style.display = 'none'; };
+
+        if (copyBtn) {
+          copyBtn.onclick = async () => {
+            if (shareGeneratedUrl && shareGeneratedUrl.value) {
+              if (navigator.clipboard) {
+                await navigator.clipboard.writeText(shareGeneratedUrl.value);
+                showToast('Secure link copied to clipboard!');
+              } else {
+                shareGeneratedUrl.select();
+                showToast('Link ready to copy.');
               }
             }
-          } else if (navigator.clipboard) {
-            await navigator.clipboard.writeText(downloadUrl);
-            showToast('Protected document link copied to clipboard.');
-          } else {
-            showToast('Document link ready.');
-          }
-        } else {
-          showToast('No protected document available to share.');
+          };
         }
+
+        shareForm.onsubmit = async (e) => {
+          e.preventDefault();
+          const docId = data.document.id;
+          if (!docId) {
+            showToast('Document ID missing. Please ensure document is saved in backend.');
+            return;
+          }
+
+          const expiryHours = parseInt(expirySelect.value, 10) || 72;
+          const maxAccessRaw = parseInt(maxAccessSelect.value, 10);
+          const maxAccess = maxAccessRaw > 0 ? maxAccessRaw : null;
+          const recipientEmail = recipientInput.value.trim() || null;
+          const purpose = state.purposeText || data.purpose || 'Authorized Document Verification';
+
+          try {
+            showToast('Generating secure access token...');
+            const res = await fetch(`${BACKEND_BASE_URL}/api/shares`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                ...(localStorage.getItem('infoshield_auth_token') ? { 'Authorization': `Bearer ${localStorage.getItem('infoshield_auth_token')}` } : {})
+              },
+              body: JSON.stringify({
+                document_id: docId,
+                purpose: purpose,
+                recipient_email: recipientEmail,
+                expiry_hours: expiryHours,
+                max_access_count: maxAccess
+              })
+            });
+
+            if (!res.ok) {
+              const err = await res.json().catch(() => ({ detail: 'Failed to create share.' }));
+              throw new Error(err.detail || 'Failed to create share.');
+            }
+
+            const shareData = await res.json();
+            const shareUrl = `${BACKEND_BASE_URL || window.location.origin}/api/shares/access/${shareData.access_token}`;
+
+            if (shareGeneratedUrl && shareResultArea) {
+              shareGeneratedUrl.value = shareUrl;
+              shareResultArea.style.display = 'block';
+            }
+            showToast('Secure share link created!');
+          } catch (err) {
+            showToast(err.message || 'Error generating secure share link.');
+          }
+        };
       };
     }
 
@@ -1394,7 +1476,13 @@
   async function loadHistoryFromBackend() {
     renderHistoryScreen();
     try {
-      const resp = await fetch(`${BACKEND_BASE_URL}/api/history`);
+      const authToken = localStorage.getItem('infoshield_auth_token');
+      const headers = {};
+      if (authToken) {
+        headers['Authorization'] = `Bearer ${authToken}`;
+      }
+      const resp = await fetch(`${BACKEND_BASE_URL}/api/history`, { headers });
+
       if (resp.ok) {
         const data = await resp.json();
         if (data && Array.isArray(data.documents) && data.documents.length > 0) {
@@ -1516,16 +1604,65 @@
     if (bottomNavProfile) bottomNavProfile.onclick = (e) => { e.preventDefault(); navigateTo('screen-profile'); };
 
     // Profile and Settings Action handlers
-
     const settingPrivacyBtn = document.getElementById('settingPrivacyBtn');
     const settingNotificationsBtn = document.getElementById('settingNotificationsBtn');
     const settingAuditBtn = document.getElementById('settingAuditBtn');
     const settingSignOutBtn = document.getElementById('settingSignOutBtn');
+    const saveAuthTokenBtn = document.getElementById('saveAuthTokenBtn');
+    const authTokenInput = document.getElementById('authTokenInput');
+    const authStatusText = document.getElementById('authStatusText');
+    const profileDisplayEmail = document.getElementById('profileDisplayEmail');
+    const profileDisplayName = document.getElementById('profileDisplayName');
+
+    function updateAuthUI() {
+      const token = localStorage.getItem('infoshield_auth_token');
+      if (token) {
+        if (authStatusText) authStatusText.textContent = 'Status: Signed in with verified JWT';
+        if (authTokenInput) authTokenInput.placeholder = 'Token saved (Bearer active)';
+        try {
+          const parts = token.split('.');
+          if (parts.length === 3) {
+            const payload = JSON.parse(atob(parts[1]));
+            if (payload.email && profileDisplayEmail) profileDisplayEmail.textContent = payload.email;
+            if (payload.sub && profileDisplayName) profileDisplayName.textContent = `User: ${payload.sub.slice(0, 8)}...`;
+          }
+        } catch (_) {}
+      } else {
+        if (authStatusText) authStatusText.textContent = 'Status: Using local/demo credentials';
+        if (profileDisplayEmail) profileDisplayEmail.textContent = 'aarav.sharma@example.com';
+        if (profileDisplayName) profileDisplayName.textContent = 'Aarav Sharma';
+      }
+    }
+
+    updateAuthUI();
+
+    if (saveAuthTokenBtn && authTokenInput) {
+      saveAuthTokenBtn.onclick = () => {
+        const val = authTokenInput.value.trim();
+        if (!val) {
+          showToast('Please paste a valid JWT token.');
+          return;
+        }
+        localStorage.setItem('infoshield_auth_token', val);
+        authTokenInput.value = '';
+        updateAuthUI();
+        showToast('Authentication token saved. Authenticated requests active.');
+        loadHistoryFromBackend();
+      };
+    }
+
+    if (settingSignOutBtn) {
+      settingSignOutBtn.onclick = () => {
+        localStorage.removeItem('infoshield_auth_token');
+        updateAuthUI();
+        showToast('Signed out successfully.');
+      };
+    }
 
     if (settingPrivacyBtn) settingPrivacyBtn.onclick = () => showToast('Zero-trust minimization is actively enabled.');
     if (settingNotificationsBtn) settingNotificationsBtn.onclick = () => showToast('Consent notification alerts are active.');
     if (settingAuditBtn) settingAuditBtn.onclick = () => showToast('Audit trail exported to local device.');
-    if (settingSignOutBtn) settingSignOutBtn.onclick = () => showToast('Signed out of session.');
+
   }
 
   async function checkBackendHealth() {

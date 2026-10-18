@@ -60,10 +60,10 @@ class RedactionEngine:
         pad_y: int = 4
     ) -> None:
         """
-        Applies professional privacy-preserving blur directly to text image pixels.
-        Area-based downsampling followed by strong Gaussian blur over slightly
-        expanded bounding box destroys OCR and visual readability while preserving
-        document background tone, color palette, and visual texture.
+        Applies irreversible opaque pixel redaction over sensitive document regions.
+        Completely replaces all underlying character strokes and pixels with an
+        opaque uniform document tone with defensive padding, destroying OCR and visual
+        recovery while maintaining document aesthetics.
         """
         img_h, img_w = img.shape[:2]
         x1 = max(0, x - pad_x)
@@ -78,26 +78,13 @@ class RedactionEngine:
 
         roi = img[y1:y2, x1:x2]
 
-        if rw < 3 or rh < 3:
-            mean_col = cv2.mean(roi)[:3]
-            img[y1:y2, x1:x2] = np.full_like(roi, [int(c) for c in mean_col], dtype=np.uint8)
-            return
+        # Sample border pixels to compute the background tone
+        mean_col = cv2.mean(roi)[:3]
+        base_color = [int(c) for c in mean_col]
 
-        # Multi-stage diffusion preserves background color while destroying glyphs
-        dw = max(2, rw // 8)
-        dh = max(2, rh // 8)
-        small = cv2.resize(roi, (dw, dh), interpolation=cv2.INTER_AREA)
-        upscaled = cv2.resize(small, (rw, rh), interpolation=cv2.INTER_LINEAR)
-        k_val = max(25, int(min(rw, rh) * 0.95))
-        if k_val % 2 == 0:
-            k_val += 1
-        max_k = min(rw if rw % 2 == 1 else rw - 1, rh if rh % 2 == 1 else rh - 1)
-        k_val = min(k_val, max(3, max_k))
-        if k_val % 2 == 0:
-            k_val -= 1
-        sigma = max(5.0, float(k_val) / 2.0)
-        blurred = cv2.GaussianBlur(upscaled, (k_val, k_val), sigma)
-        img[y1:y2, x1:x2] = blurred
+        # Completely replace the region with uniform opaque color — no glyph edges remain
+        img[y1:y2, x1:x2] = np.full_like(roi, base_color, dtype=np.uint8)
+
 
     @staticmethod
     def _apply_qr_mask(
@@ -196,10 +183,10 @@ class RedactionEngine:
             norm_key = field_name.lower().replace("_", "").replace(" ", "")
 
             # ------------------------------------------------------------------
-            # Global Photo-Preservation Rule:
-            # Never mask, blur, pixelate, or redact a detected person's photograph.
-            # Preserve photo pixels exactly wherever the photo region is reliably identified.
-            # If the photo region is uncertain, avoid broad masks and return a review warning.
+            # Policy-Driven Photo Preservation / Redaction Rule:
+            # Check policy requirements for photograph. Only preserve photo pixels
+            # when explicitly REQUIRED (e.g., identity verification). If UNNECESSARY
+            # or CONDITIONAL, mask the photograph region to prevent unnecessary biometric exposure.
             # ------------------------------------------------------------------
             if field_name == "Photograph" or norm_key == "photograph":
                 raw_bbox = item.get("bbox")
@@ -207,16 +194,38 @@ class RedactionEngine:
                     warnings.append("Photograph region uncertain; visual mask avoided to prevent accidental biometric occlusion.")
                     continue
                 scaled_bbox = self._scale_box(raw_bbox, ocr_scale, is_already_original=True)
-                stats["preserved"] += 1
-                redactions_applied.append({
-                    "field": "Photograph",
-                    "action": "PRESERVED",
-                    "status": "REQUIRED",
-                    "details": "Visual face photograph preserved across all workflows per global identity preservation rule",
-                    "reason": "Visual face photograph is globally preserved to ensure human identity verification.",
-                    "bbox": scaled_bbox
-                })
+
+                req = req_map.get(norm_key)
+                req_status = (req.get("decision") or req.get("status") or "REQUIRED").upper() if req else "REQUIRED"
+                req_action = (req.get("action") or "").upper() if req else ""
+
+                if req_status == "REQUIRED" or req_action == "PRESERVED":
+                    stats["preserved"] += 1
+                    redactions_applied.append({
+                        "field": "Photograph",
+                        "action": "PRESERVED",
+                        "status": "REQUIRED",
+                        "details": "Visual face photograph preserved per verified necessity",
+                        "reason": req.get("reason", "Visual face photograph preserved for identity verification.") if req else "Visual face photograph preserved for identity verification.",
+                        "bbox": scaled_bbox
+                    })
+                else:
+                    self._apply_privacy_blur(
+                        img,
+                        scaled_bbox["x"], scaled_bbox["y"], scaled_bbox["width"], scaled_bbox["height"],
+                        pad_x=4, pad_y=4
+                    )
+                    stats["fully_redacted"] += 1
+                    redactions_applied.append({
+                        "field": "Photograph",
+                        "action": "FULLY_REDACTED",
+                        "status": req_status,
+                        "details": "Concealed photograph per policy to prevent biometric exposure",
+                        "reason": req.get("reason", "Biometric face photograph unnecessary for stated purpose.") if req else "Biometric face photograph unnecessary for stated purpose.",
+                        "bbox": scaled_bbox
+                    })
                 continue
+
 
             req = req_map.get(norm_key)
 

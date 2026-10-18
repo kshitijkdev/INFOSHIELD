@@ -149,6 +149,27 @@ CREATE TABLE IF NOT EXISTS audit_logs (
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- -----------------------------------------------------------------------------
+-- 9. DOCUMENT SHARES TABLE (SECURE TOKEN SHARING)
+-- -----------------------------------------------------------------------------
+-- Cryptographic token-based document sharing with hashed token storage,
+-- configurable expiry, access counting, recipient restriction, and revocation.
+CREATE TABLE IF NOT EXISTS document_shares (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    document_id UUID NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+    owner_user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    recipient_email TEXT,
+    token_hash TEXT NOT NULL UNIQUE,
+    purpose TEXT NOT NULL,
+    expires_at TIMESTAMPTZ NOT NULL,
+    max_access_count INTEGER,
+    access_count INTEGER NOT NULL DEFAULT 0,
+    is_revoked BOOLEAN NOT NULL DEFAULT false,
+    revoked_at TIMESTAMPTZ,
+    last_accessed_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 -- =============================================================================
 -- PERFORMANCE INDEXES
 -- =============================================================================
@@ -161,6 +182,8 @@ CREATE INDEX IF NOT EXISTS idx_protected_documents_document_id ON protected_docu
 CREATE INDEX IF NOT EXISTS idx_audit_logs_document_id ON audit_logs(document_id);
 CREATE INDEX IF NOT EXISTS idx_audit_logs_user_id ON audit_logs(user_id);
 CREATE INDEX IF NOT EXISTS idx_policy_rules_lookup ON policy_rules(document_type, purpose_domain, purpose_task, pii_type);
+CREATE INDEX IF NOT EXISTS idx_document_shares_token_hash ON document_shares(token_hash);
+CREATE INDEX IF NOT EXISTS idx_document_shares_doc_owner ON document_shares(document_id, owner_user_id);
 
 -- =============================================================================
 -- ROW LEVEL SECURITY (RLS)
@@ -173,6 +196,7 @@ ALTER TABLE risk_predictions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE policy_rules ENABLE ROW LEVEL SECURITY;
 ALTER TABLE protected_documents ENABLE ROW LEVEL SECURITY;
 ALTER TABLE audit_logs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE document_shares ENABLE ROW LEVEL SECURITY;
 
 -- Service role access policies (FastAPI backend uses service role key)
 CREATE POLICY service_role_users ON users FOR ALL TO service_role USING (true) WITH CHECK (true);
@@ -183,6 +207,7 @@ CREATE POLICY service_role_risk ON risk_predictions FOR ALL TO service_role USIN
 CREATE POLICY service_role_policy ON policy_rules FOR ALL TO service_role USING (true) WITH CHECK (true);
 CREATE POLICY service_role_protected ON protected_documents FOR ALL TO service_role USING (true) WITH CHECK (true);
 CREATE POLICY service_role_audit ON audit_logs FOR ALL TO service_role USING (true) WITH CHECK (true);
+CREATE POLICY service_role_shares ON document_shares FOR ALL TO service_role USING (true) WITH CHECK (true);
 
 -- Authenticated user policies (Users access only their own records)
 CREATE POLICY user_own_documents ON documents FOR ALL TO authenticated USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
@@ -190,6 +215,8 @@ CREATE POLICY user_own_purpose ON purpose_analyses FOR SELECT TO authenticated U
 CREATE POLICY user_own_pii ON pii_entities FOR SELECT TO authenticated USING (EXISTS (SELECT 1 FROM documents WHERE documents.id = pii_entities.document_id AND documents.user_id = auth.uid()));
 CREATE POLICY user_own_protected ON protected_documents FOR SELECT TO authenticated USING (EXISTS (SELECT 1 FROM documents WHERE documents.id = protected_documents.document_id AND documents.user_id = auth.uid()));
 CREATE POLICY user_own_audit ON audit_logs FOR SELECT TO authenticated USING (user_id = auth.uid() OR EXISTS (SELECT 1 FROM documents WHERE documents.id = audit_logs.document_id AND documents.user_id = auth.uid()));
+CREATE POLICY user_own_shares ON document_shares FOR ALL TO authenticated USING (owner_user_id = auth.uid()) WITH CHECK (owner_user_id = auth.uid());
 
 -- Policy rules reference table is read-only for authenticated and public
 CREATE POLICY read_policy_rules ON policy_rules FOR SELECT TO anon, authenticated USING (true);
+

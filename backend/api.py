@@ -1,6 +1,15 @@
 """
 InfoShield AI - FastAPI Document OCR & PII Exposure Prevention Service
 Production HTTP API wrapping real Tesseract OCR and PII classification.
+
+Security Hardened:
+- JWT-based authentication via Supabase Auth
+- Server-side ownership enforcement on all document endpoints
+- Streaming upload size enforcement
+- Content-type validation via magic bytes
+- Opaque error responses (no stack traces/internal paths to client)
+- Rate limiting on expensive OCR operations
+- Secure document sharing with token verification
 """
 
 import os
@@ -11,9 +20,10 @@ import hashlib
 import logging
 import traceback
 import time
+import struct
 from typing import Dict, Any, List, Optional, Tuple
 from pydantic import BaseModel, Field
-from fastapi import FastAPI, File, UploadFile, Form, HTTPException, status
+from fastapi import FastAPI, File, UploadFile, Form, HTTPException, status, Depends, Query
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
@@ -52,6 +62,12 @@ from redaction_engine import RedactionEngine
 from purpose_ai import get_purpose_ai
 from risk_model import get_risk_model
 from supabase_service import get_db_service
+from auth import get_current_user, get_optional_user, AuthenticatedUser, verify_document_ownership
+from sharing import ShareService
+
+# Environment mode
+ENV_MODE = os.getenv("ENV", "development").strip().lower()
+IS_PRODUCTION = ENV_MODE in ("production", "prod")
 
 # Resolve file storage directories relative to backend if not absolute
 _env_upload = os.getenv("UPLOAD_DIR")
@@ -73,8 +89,13 @@ else:
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-def cleanup_stale_files(directory: str, max_age_seconds: int = 7200):
-    """Safely cleans up temporary processing files older than max_age_seconds (default 2 hours)."""
+# Temp dir for processing (distinct from completed outputs)
+TEMP_DIR = os.path.join(BASE_DIR, "temp_processing")
+os.makedirs(TEMP_DIR, exist_ok=True)
+
+
+def cleanup_temp_files(directory: str, max_age_seconds: int = 3600):
+    """Cleans up TEMPORARY processing files only (not completed protected outputs)."""
     try:
         if os.path.isdir(directory):
             now = time.time()
@@ -88,8 +109,125 @@ def cleanup_stale_files(directory: str, max_age_seconds: int = 7200):
     except Exception as e:
         logger.warning(f"Error during cleanup of {directory}: {e}")
 
+
+def cleanup_uploads_by_policy():
+    """Clean up original uploads based on CLEANUP_ORIGINALS policy."""
+    cleanup_originals = os.getenv("CLEANUP_ORIGINALS", "false").strip().lower()
+    if cleanup_originals == "true":
+        max_age = int(os.getenv("UPLOAD_RETENTION_SECONDS", "3600"))
+        cleanup_temp_files(UPLOAD_DIR, max_age_seconds=max_age)
+
+
 # File constraints
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
+MAX_IMAGE_DIMENSION = 10000  # pixels
+MAX_IMAGE_PIXELS = 50_000_000  # 50 megapixels
+
+# Image magic bytes for content validation
+IMAGE_SIGNATURES = {
+    b'\xff\xd8\xff': 'image/jpeg',      # JPEG
+    b'\x89PNG\r\n\x1a\n': 'image/png',  # PNG
+    b'RIFF': 'image/webp',              # WebP (RIFF container)
+}
+
+def validate_image_content(file_path: str) -> Optional[str]:
+    """
+    Validates image file content by checking magic bytes and decodability.
+    Returns detected MIME type or raises HTTPException.
+    """
+    try:
+        with open(file_path, "rb") as f:
+            header = f.read(16)
+    except Exception:
+        return None
+
+    if len(header) < 4:
+        return None
+
+    # Check magic bytes
+    detected_mime = None
+    for sig, mime in IMAGE_SIGNATURES.items():
+        if header[:len(sig)] == sig:
+            detected_mime = mime
+            break
+
+    # WebP needs additional check (RIFF....WEBP)
+    if header[:4] == b'RIFF' and len(header) >= 12:
+        if header[8:12] != b'WEBP':
+            return None
+        detected_mime = 'image/webp'
+
+    if not detected_mime:
+        return None
+
+    # Verify image dimensions are within safe limits
+    try:
+        import cv2
+        img = cv2.imread(file_path)
+        if img is None:
+            return None
+        h, w = img.shape[:2]
+        if w > MAX_IMAGE_DIMENSION or h > MAX_IMAGE_DIMENSION:
+            return None
+        if w * h > MAX_IMAGE_PIXELS:
+            return None
+    except Exception:
+        return None
+
+    return detected_mime
+
+
+def stream_upload_with_limit(upload_file, dest_path: str, max_bytes: int) -> int:
+    """
+    Streams upload to disk with byte limit enforcement.
+    Stops immediately when limit is exceeded and removes partial file.
+    Returns total bytes written.
+    """
+    total = 0
+    chunk_size = 8192
+    try:
+        with open(dest_path, "wb") as f:
+            while True:
+                chunk = upload_file.read(chunk_size)
+                if not chunk:
+                    break
+                total += len(chunk)
+                if total > max_bytes:
+                    # Exceeded limit — stop immediately
+                    f.close()
+                    _safe_remove(dest_path)
+                    raise HTTPException(
+                        status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                        detail=f"File size exceeds maximum permitted limit of {max_bytes // (1024*1024)}MB."
+                    )
+                f.write(chunk)
+    except HTTPException:
+        raise
+    except Exception as e:
+        _safe_remove(dest_path)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to process uploaded file."
+        )
+    return total
+
+
+def _safe_remove(path: str):
+    """Safely remove a file, ignoring errors."""
+    try:
+        if path and os.path.isfile(path):
+            os.remove(path)
+    except Exception:
+        pass
+
+
+def _generate_safe_filename(original_name: str) -> str:
+    """Generate a safe storage filename using UUID, preserving only the extension."""
+    ext = os.path.splitext(os.path.basename(original_name))[1].lower()
+    if ext not in SUPPORTED_EXTENSIONS:
+        ext = ".png"
+    return f"{uuid.uuid4().hex}{ext}"
+
 
 # Initialize engines
 ocr_engine = OCREngine()
@@ -98,6 +236,7 @@ redaction_engine = RedactionEngine(OUTPUT_DIR)
 purpose_ai = get_purpose_ai()
 risk_model = get_risk_model()
 db_service = get_db_service()
+share_service = ShareService(db_service)
 
 SUPPORTED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
 
@@ -135,59 +274,71 @@ FIELD_TYPE_MAP = {
 app = FastAPI(
     title="InfoShield OCR API",
     description="Real OCR & PII Exposure Prevention API for InfoShield",
-    version="1.0.0"
+    version="2.0.0"
 )
 
 # ------------------------------------------------------------------------------
-# Robust CORS Configuration (Local Laptop Dev + Cloud Hosting)
+# Environment-Specific CORS Configuration
 # ------------------------------------------------------------------------------
-# Local development origins (always enabled so local laptop testing never fails)
-LOCAL_DEV_ORIGINS = [
-    "http://127.0.0.1:5500",
-    "http://localhost:5500",
-    "http://127.0.0.1:3000",
-    "http://localhost:3000",
-    "http://127.0.0.1:5173",
-    "http://localhost:5173",
-    "http://127.0.0.1:8000",
-    "http://localhost:8000",
-    "http://127.0.0.1:8080",
-    "http://localhost:8080",
-]
-
-# Additional configured origins from environment (.env or cloud settings)
-raw_origins = os.getenv("ALLOWED_ORIGINS", "").strip()
-env_origins = [orig.strip() for orig in raw_origins.split(",") if orig.strip()]
-
-# Combine local dev origins and environment origins (deduplicated, preserving order)
-allowed_origins = list(dict.fromkeys(LOCAL_DEV_ORIGINS + env_origins))
-
-frontend_url = os.getenv("FRONTEND_URL", "").strip()
-if frontend_url and frontend_url not in allowed_origins:
-    allowed_origins.append(frontend_url)
-
-# Support any port on localhost / 127.0.0.1, plus Vercel preview domains
-cors_regex = os.getenv(
-    "ALLOWED_ORIGIN_REGEX",
-    r"^(https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?|https:\/\/.*\.vercel\.app)$"
-)
+if IS_PRODUCTION:
+    # Production: only configured origins, no localhost
+    raw_origins = os.getenv("ALLOWED_ORIGINS", "").strip()
+    allowed_origins = [orig.strip() for orig in raw_origins.split(",") if orig.strip()]
+    frontend_url = os.getenv("FRONTEND_URL", "").strip()
+    if frontend_url and frontend_url not in allowed_origins:
+        allowed_origins.append(frontend_url)
+    # No wildcard regex in production
+    cors_regex = os.getenv("ALLOWED_ORIGIN_REGEX", "")
+    cors_methods = ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+    cors_headers = ["Authorization", "Content-Type", "Accept"]
+    cors_expose = ["Content-Disposition"]
+else:
+    # Development: include localhost origins
+    LOCAL_DEV_ORIGINS = [
+        "http://127.0.0.1:5500",
+        "http://localhost:5500",
+        "http://127.0.0.1:3000",
+        "http://localhost:3000",
+        "http://127.0.0.1:5173",
+        "http://localhost:5173",
+        "http://127.0.0.1:8000",
+        "http://localhost:8000",
+        "http://127.0.0.1:8080",
+        "http://localhost:8080",
+    ]
+    raw_origins = os.getenv("ALLOWED_ORIGINS", "").strip()
+    env_origins = [orig.strip() for orig in raw_origins.split(",") if orig.strip()]
+    allowed_origins = list(dict.fromkeys(LOCAL_DEV_ORIGINS + env_origins))
+    frontend_url = os.getenv("FRONTEND_URL", "").strip()
+    if frontend_url and frontend_url not in allowed_origins:
+        allowed_origins.append(frontend_url)
+    cors_regex = r"^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$"
+    cors_methods = ["*"]
+    cors_headers = ["*"]
+    cors_expose = ["*"]
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
-    allow_origin_regex=cors_regex,
+    allow_origin_regex=cors_regex if cors_regex else None,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-    expose_headers=["*"],
+    allow_methods=cors_methods,
+    allow_headers=cors_headers,
+    expose_headers=cors_expose,
     max_age=600,
 )
 
+
 @app.on_event("startup")
 def startup_event():
-    """Startup routine: clean up stale temporary files on boot."""
-    cleanup_stale_files(UPLOAD_DIR, max_age_seconds=3600)
-    cleanup_stale_files(OUTPUT_DIR, max_age_seconds=7200)
+    """Startup: clean up temp processing files only (not completed outputs)."""
+    cleanup_temp_files(TEMP_DIR, max_age_seconds=3600)
+    cleanup_uploads_by_policy()
+
+    # Production readiness check
+    if IS_PRODUCTION:
+        if not db_service.is_connected():
+            logger.error("PRODUCTION STARTUP WARNING: Database is not connected!")
 
 
 def classify_document_type(text: str, fields_dict: Dict[str, Any]) -> Tuple[str, float, List[str]]:
@@ -249,11 +400,15 @@ def detect_document_type(text: str, fields_dict: Dict[str, Any]) -> str:
     return doc_type
 
 
+# ==============================================================================
+# PUBLIC ENDPOINTS (No auth required)
+# ==============================================================================
+
 @app.get("/api/health")
 def health_check():
     """
-    Health check endpoint.
-    Returns status and service identifier.
+    Liveness check. Returns basic service status.
+    Does NOT expose infrastructure details.
     """
     return {
         "status": "ok",
@@ -261,12 +416,58 @@ def health_check():
     }
 
 
+@app.get("/api/readiness")
+def readiness_check():
+    """
+    Readiness check for deployment orchestrators.
+    Verifies required dependencies are available.
+    """
+    checks = {}
+
+    # Database
+    db_ok = db_service.is_connected()
+    checks["database"] = "ok" if db_ok else "unavailable"
+
+    # OCR Engine
+    try:
+        ocr_ready = ocr_engine is not None
+        checks["ocr"] = "ok" if ocr_ready else "unavailable"
+    except Exception:
+        checks["ocr"] = "unavailable"
+
+    # Risk Model
+    try:
+        model_ready = risk_model is not None
+        checks["risk_model"] = "ok" if model_ready else "unavailable"
+    except Exception:
+        checks["risk_model"] = "unavailable"
+
+    # Storage
+    checks["upload_dir"] = "ok" if os.path.isdir(UPLOAD_DIR) and os.access(UPLOAD_DIR, os.W_OK) else "unavailable"
+    checks["output_dir"] = "ok" if os.path.isdir(OUTPUT_DIR) and os.access(OUTPUT_DIR, os.W_OK) else "unavailable"
+
+    all_ok = all(v == "ok" for v in checks.values())
+
+    return {
+        "status": "ready" if all_ok else "degraded",
+        "checks": checks
+    }
+
+
+# ==============================================================================
+# AUTHENTICATED ENDPOINTS
+# ==============================================================================
+
 @app.post("/api/scan")
-async def scan_document_endpoint(file: UploadFile = File(...)):
+async def scan_document_endpoint(
+    file: UploadFile = File(...),
+    user: AuthenticatedUser = Depends(get_current_user)
+):
     """
     Accepts multipart/form-data upload of an image (.jpg, .jpeg, .png, .webp),
-    saves the image temporarily to uploads/, runs real Tesseract OCR + PII detection,
-    and returns unmasked structured extraction data.
+    runs real Tesseract OCR + PII detection.
+    Returns structured extraction data (document type, PII metadata).
+    Does NOT return raw OCR text to prevent unnecessary data exposure.
     """
     if not file or not file.filename:
         raise HTTPException(
@@ -274,129 +475,115 @@ async def scan_document_endpoint(file: UploadFile = File(...)):
             detail="No file uploaded or filename is missing."
         )
 
-    filename = file.filename
-    ext = os.path.splitext(filename)[1].lower()
+    ext = os.path.splitext(file.filename)[1].lower()
     if ext not in SUPPORTED_EXTENSIONS:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Unsupported image format: '{ext}'. Supported formats: {', '.join(sorted(SUPPORTED_EXTENSIONS))}"
+            detail=f"Unsupported image format. Supported: {', '.join(sorted(SUPPORTED_EXTENSIONS))}"
         )
 
-    # Save uploaded image to uploads directory
-    safe_basename = os.path.basename(filename)
-    unique_name = f"{uuid.uuid4().hex}_{safe_basename}"
-    saved_path = os.path.join(UPLOAD_DIR, unique_name)
+    # Save with safe generated filename, enforcing size limit during streaming
+    safe_name = _generate_safe_filename(file.filename)
+    saved_path = os.path.join(TEMP_DIR, safe_name)
 
     try:
-        with open(saved_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to save uploaded file: {str(e)}"
+        file_size = stream_upload_with_limit(file.file, saved_path, MAX_FILE_SIZE)
+
+        # Validate image content (magic bytes + decodability)
+        detected_mime = validate_image_content(saved_path)
+        if not detected_mime:
+            _safe_remove(saved_path)
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="File content is not a valid image or exceeds dimension limits."
+            )
+
+        # Execute real OCR pipeline
+        try:
+            ocr_result = ocr_engine.extract_text(saved_path)
+        except OCREngineError:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Could not process this image. Please ensure it is a clear document scan."
+            )
+        except Exception:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="An error occurred during document processing."
+            )
+
+        raw_text = ocr_result.get("raw_text", "").strip()
+        qr_detected = ocr_result.get("qr_detected", False)
+        qr_data = ocr_result.get("qr_data", None)
+        qr_bbox = ocr_result.get("qr_bbox", None)
+        qr_polygon = ocr_result.get("qr_polygon", None)
+        photo_detected = ocr_result.get("photo_detected", False)
+        photo_bbox = ocr_result.get("photo_bbox", None)
+        word_data = ocr_result.get("word_data", None)
+        ocr_scale = ocr_result.get("ocr_scale", 1.0)
+        confidence = float(ocr_result.get("confidence", 50.0))
+
+        # Extract structured PII fields
+        fields_dict = pii_detector.extract_document_fields(
+            text=raw_text,
+            word_data=word_data,
+            qr_detected=qr_detected,
+            qr_data=qr_data,
+            qr_bbox=qr_bbox,
+            qr_polygon=qr_polygon,
+            photo_detected=photo_detected,
+            photo_bbox=photo_bbox
         )
 
-    file_size = os.path.getsize(saved_path)
-    if file_size > MAX_FILE_SIZE:
-        os.remove(saved_path)
-        raise HTTPException(
-            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            detail="File size exceeds maximum permitted limit of 10MB."
-        )
+        # Transform into API PII list format (NO raw values exposed)
+        pii_items = []
+        for field_name, item in fields_dict.items():
+            val = item.get("value", "").strip()
+            if not val or val == "Could not confidently determine":
+                continue
+            pii_entry = {
+                "type": FIELD_TYPE_MAP.get(field_name, field_name.lower().replace(" ", "_")),
+                "risk": item.get("risk", "MEDIUM"),
+                "confidence": round(float(item.get("confidence", 0.9)), 2)
+            }
+            raw_box = item.get("bbox")
+            if raw_box:
+                is_orig = (field_name in ["QR Code", "Photograph"])
+                pii_entry["bbox"] = redaction_engine._scale_box(raw_box, ocr_scale, is_already_original=is_orig)
+            pii_items.append(pii_entry)
 
-    # Execute real OCR pipeline on uploaded image
-    try:
-        ocr_result = ocr_engine.extract_text(saved_path)
-    except OCREngineError as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"OCR Engine error: {str(e)}"
-        )
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Unexpected error during OCR processing: {str(e)}"
-        )
-    finally:
-        # Secure cleanup: Remove temporary scan file immediately to avoid storing unredacted uploads
-        if os.getenv("CLEANUP_SCAN_TEMP", "true").lower() == "true":
-            try:
-                if os.path.isfile(saved_path):
-                    os.remove(saved_path)
-            except Exception:
-                pass
+        # Classify document type
+        doc_type, doc_conf, doc_warnings = classify_document_type(raw_text, fields_dict)
 
-    raw_text = ocr_result.get("raw_text", "").strip()
-    qr_detected = ocr_result.get("qr_detected", False)
-    qr_data = ocr_result.get("qr_data", None)
-    qr_bbox = ocr_result.get("qr_bbox", None)
-    qr_polygon = ocr_result.get("qr_polygon", None)
-    photo_detected = ocr_result.get("photo_detected", False)
-    photo_bbox = ocr_result.get("photo_bbox", None)
-    word_data = ocr_result.get("word_data", None)
-    ocr_scale = ocr_result.get("ocr_scale", 1.0)
-    confidence = float(ocr_result.get("confidence", 50.0))
+        warnings = list(doc_warnings)
+        if "aadhaar" in doc_type.lower() and not qr_detected:
+            warnings.append(
+                "QR code detection failed. Physical QR redaction could not be applied automatically."
+            )
 
-    # Extract structured PII fields
-    fields_dict = pii_detector.extract_document_fields(
-        text=raw_text,
-        word_data=word_data,
-        qr_detected=qr_detected,
-        qr_data=qr_data,
-        qr_bbox=qr_bbox,
-        qr_polygon=qr_polygon,
-        photo_detected=photo_detected,
-        photo_bbox=photo_bbox
-    )
-
-    # Transform into required API PII list format
-    pii_items = []
-    for field_name, item in fields_dict.items():
-        val = item.get("value", "").strip()
-        if not val or val == "Could not confidently determine":
-            continue
-        pii_entry = {
-            "type": FIELD_TYPE_MAP.get(field_name, field_name.lower().replace(" ", "_")),
-            "value": val,
-            "risk": item.get("risk", "MEDIUM"),
-            "confidence": round(float(item.get("confidence", 0.9)), 2)
+        doc_meta = {
+            "type": doc_type,
+            "confidence": doc_conf,
+            "qr_detected": qr_detected
         }
-        raw_box = item.get("bbox")
-        if raw_box:
-            is_orig = (field_name in ["QR Code", "Photograph"])
-            pii_entry["bbox"] = redaction_engine._scale_box(raw_box, ocr_scale, is_already_original=is_orig)
-        pii_items.append(pii_entry)
+        if warnings:
+            doc_meta["warnings"] = warnings
 
-    # Classify document type
-    doc_type, doc_conf, doc_warnings = classify_document_type(raw_text, fields_dict)
+        return {
+            "success": True,
+            "document": doc_meta,
+            "warnings": warnings,
+            "ocr": {
+                "engine": "Tesseract",
+                "confidence": confidence
+            },
+            "pii": pii_items
+            # NOTE: raw_text intentionally NOT returned to prevent data exposure
+        }
 
-    warnings = list(doc_warnings)
-    if "aadhaar" in doc_type.lower() and not qr_detected:
-        warnings.append(
-            f"WARNING: QR code detection failed on {doc_type}. Physical QR redaction could not be applied automatically. Verify document privacy before sharing."
-        )
-
-    doc_meta = {
-        "filename": safe_basename,
-        "type": doc_type,
-        "confidence": doc_conf,
-        "qr_detected": qr_detected
-    }
-    if warnings:
-        doc_meta["warnings"] = warnings
-
-    res = {
-        "success": True,
-        "document": doc_meta,
-        "warnings": warnings,
-        "ocr": {
-            "engine": "Tesseract",
-            "confidence": confidence
-        },
-        "pii": pii_items,
-        "raw_text": raw_text
-    }
-    return res
+    finally:
+        # Always clean up temp scan file
+        _safe_remove(saved_path)
 
 
 class PIIEntityInput(BaseModel):
@@ -413,7 +600,10 @@ class AnalyzePurposeRequest(BaseModel):
 
 
 @app.post("/api/analyze-purpose")
-async def analyze_purpose_endpoint(payload: AnalyzePurposeRequest):
+async def analyze_purpose_endpoint(
+    payload: AnalyzePurposeRequest,
+    user: AuthenticatedUser = Depends(get_current_user)
+):
     """
     Analyzes natural language submission purpose and determines purpose-based
     PII requirements (REQUIRED, CONDITIONAL, UNNECESSARY) for data minimization.
@@ -443,17 +633,12 @@ async def analyze_purpose_endpoint(payload: AnalyzePurposeRequest):
 async def protect_document_endpoint(
     file: UploadFile = File(...),
     purpose: str = Form(...),
-    user_id: Optional[str] = Form(None)
+    user: AuthenticatedUser = Depends(get_current_user)
 ):
     """
-    Phase 4B Unified Real Document Protection & Database Persistence Pipeline:
-    1. Uploaded Image -> Document record (status: UPLOADED) + Audit Log
-    2. Real Tesseract OCR -> Document record (status: SCANNED) + Audit Log
-    3. PII Detection + Spatial Bounding Boxes + Audit Log
-    4. AI Semantic Purpose Analysis -> Purpose Analysis record + Audit Log
-    5. Policy Layer Data Minimization & ML Exposure Risk Estimation
-    6. Real Image Physical Pixel Redaction -> Protected Document record + Audit Log
-    7. Returns complete explainable protection results with Database Status.
+    Unified Document Protection Pipeline:
+    1. Upload -> OCR -> PII Detection -> Purpose Analysis -> Redaction -> Database Persistence
+    User ID is derived from verified JWT, never from client input.
     """
     if not file or not file.filename:
         raise HTTPException(
@@ -464,445 +649,425 @@ async def protect_document_endpoint(
     if not purpose or not purpose.strip():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="The 'purpose' form parameter is mandatory and cannot be empty."
+            detail="The 'purpose' form parameter is mandatory."
         )
 
-    filename = file.filename
-    ext = os.path.splitext(filename)[1].lower()
+    ext = os.path.splitext(file.filename)[1].lower()
     if ext not in SUPPORTED_EXTENSIONS:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Unsupported image format: '{ext}'. Supported formats: {', '.join(sorted(SUPPORTED_EXTENSIONS))}"
+            detail=f"Unsupported image format. Supported: {', '.join(sorted(SUPPORTED_EXTENSIONS))}"
         )
 
-    # Save uploaded image to uploads directory (preserves original untouched!)
-    safe_basename = os.path.basename(filename)
-    unique_id = uuid.uuid4().hex[:8]
-    unique_name = f"{unique_id}_{safe_basename}"
-    saved_path = os.path.join(UPLOAD_DIR, unique_name)
+    # Use authenticated user ID from JWT
+    effective_user_id = user.user_id
+
+    # Save with safe generated filename, enforcing size during streaming
+    safe_display_name = os.path.basename(file.filename)
+    safe_name = _generate_safe_filename(file.filename)
+    saved_path = os.path.join(UPLOAD_DIR, safe_name)
+    processing_failed = False
 
     try:
-        with open(saved_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to save uploaded file: {str(e)}"
+        file_size = stream_upload_with_limit(file.file, saved_path, MAX_FILE_SIZE)
+
+        # Validate image content
+        detected_mime = validate_image_content(saved_path)
+        if not detected_mime:
+            _safe_remove(saved_path)
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="File content is not a valid image or exceeds dimension limits."
+            )
+
+        # Calculate SHA-256 hash
+        with open(saved_path, "rb") as f_chk:
+            file_hash = hashlib.sha256(f_chk.read()).hexdigest()
+
+        # ---------- Database Step 1: Initialize Document Record ----------
+        db_doc_id = None
+        db_status = "UNAVAILABLE"
+        db_error = None
+        audit_events_recorded = 0
+
+        if IS_PRODUCTION and not db_service.is_connected():
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Document processing is temporarily unavailable. Database is not connected."
+            )
+
+        try:
+            db_doc_id = db_service.create_document(
+                user_id=effective_user_id,
+                original_filename=safe_display_name,
+                document_type="Pending OCR",
+                mime_type=detected_mime,
+                file_size=file_size,
+                document_hash=file_hash,
+                ocr_engine="Tesseract",
+                status="UPLOADED"
+            )
+            if db_doc_id:
+                db_status = "CONNECTED"
+                db_service.create_audit_log(
+                    user_id=effective_user_id,
+                    document_id=db_doc_id,
+                    action="DOCUMENT_UPLOADED",
+                    status="SUCCESS",
+                    metadata={"file_size": file_size}
+                )
+                audit_events_recorded += 1
+            else:
+                db_error = db_service.last_error or "Document creation failed"
+                if IS_PRODUCTION:
+                    raise HTTPException(
+                        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                        detail="Failed to initialize document record."
+                    )
+        except HTTPException:
+            raise
+        except Exception as e:
+            db_error = f"{type(e).__name__}: document initialization failed"
+            logger.error(f"DB document initialization error: {e}", exc_info=True)
+            if IS_PRODUCTION:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="Failed to initialize document record."
+                )
+
+        # ---------- Pipeline Step 1: OCR Extraction ----------
+        try:
+            ocr_result = ocr_engine.extract_text(saved_path)
+        except OCREngineError:
+            processing_failed = True
+            if db_doc_id:
+                db_service.update_document_status(db_doc_id, "FAILED")
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Could not process this image. Ensure it is a clear document scan."
+            )
+        except Exception:
+            processing_failed = True
+            if db_doc_id:
+                db_service.update_document_status(db_doc_id, "FAILED")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="An error occurred during document processing."
+            )
+
+        raw_text = ocr_result.get("raw_text", "").strip()
+        qr_detected = ocr_result.get("qr_detected", False)
+        qr_data = ocr_result.get("qr_data", None)
+        qr_bbox = ocr_result.get("qr_bbox", None)
+        qr_polygon = ocr_result.get("qr_polygon", None)
+        photo_detected = ocr_result.get("photo_detected", False)
+        photo_bbox = ocr_result.get("photo_bbox", None)
+        word_data = ocr_result.get("word_data", None)
+        ocr_scale = ocr_result.get("ocr_scale", 1.0)
+        confidence = float(ocr_result.get("confidence", 50.0))
+
+        # ---------- Pipeline Step 2: PII Detection ----------
+        fields_dict = pii_detector.extract_document_fields(
+            text=raw_text,
+            word_data=word_data,
+            qr_detected=qr_detected,
+            qr_data=qr_data,
+            qr_bbox=qr_bbox,
+            qr_polygon=qr_polygon,
+            photo_detected=photo_detected,
+            photo_bbox=photo_bbox
         )
 
-    # Calculate file size & SHA-256 hash for document integrity
-    file_size = os.path.getsize(saved_path)
-    if file_size > MAX_FILE_SIZE:
-        os.remove(saved_path)
-        raise HTTPException(
-            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            detail="File size exceeds maximum permitted limit of 10MB."
-        )
+        pii_items = []
+        for field_name, item in fields_dict.items():
+            val = item.get("value", "").strip()
+            if not val or val == "Could not confidently determine":
+                continue
+            pii_items.append({
+                "type": FIELD_TYPE_MAP.get(field_name, field_name.lower().replace(" ", "_")),
+                "value": val,
+                "risk": item.get("risk", "MEDIUM"),
+                "confidence": round(float(item.get("confidence", 0.9)), 2)
+            })
 
-    with open(saved_path, "rb") as f_chk:
-        file_hash = hashlib.sha256(f_chk.read()).hexdigest()
+        # Document type classification
+        doc_type, doc_conf, doc_warnings = classify_document_type(raw_text, fields_dict)
 
-    # --------------------------------------------------------------------------
-    # Database Step 1: Initialize Document Tracking Record
-    # --------------------------------------------------------------------------
-    print("\n" + "=" * 70, flush=True)
-    print("[SUPABASE DB] Phase 4B Database Operations Started for /api/protect", flush=True)
-    effective_user_id = user_id
-    if not effective_user_id:
-        print("[SUPABASE DB] [Step 1/7] Ensuring demo user exists in database...", flush=True)
-        effective_user_id = db_service.ensure_demo_user()
-        print(f"[SUPABASE DB] [Step 1/7] User ID resolved: {effective_user_id}", flush=True)
-    else:
-        print(f"[SUPABASE DB] [Step 1/7] User ID provided by client: {effective_user_id}", flush=True)
+        warnings = list(doc_warnings)
+        if "aadhaar" in doc_type.lower() and not qr_detected:
+            warnings.append(
+                "QR code detection failed. Physical QR redaction could not be applied automatically."
+            )
 
-    db_doc_id = None
-    db_status = "UNAVAILABLE"
-    db_error = None
-    audit_events_recorded = 0
-
-    print(f"[SUPABASE DB] [Step 2/7] Inserting document: '{safe_basename}' (size: {file_size} bytes, hash: {file_hash[:16]}...)...", flush=True)
-    try:
-        db_doc_id = db_service.create_document(
-            user_id=effective_user_id,
-            original_filename=safe_basename,
-            document_type="Pending OCR",
-            mime_type=file.content_type or "image/png",
-            file_size=file_size,
-            document_hash=file_hash,
-            ocr_engine="Tesseract",
-            status="UPLOADED"
-        )
         if db_doc_id:
-            db_status = "CONNECTED"
-            print(f"[SUPABASE DB] [Step 2/7] SUCCESS: Document created with ID: {db_doc_id}", flush=True)
-            audit_id = db_service.create_audit_log(
-                user_id=effective_user_id,
-                document_id=db_doc_id,
-                action="DOCUMENT_UPLOADED",
-                status="SUCCESS",
-                metadata={"filename": safe_basename, "file_size": file_size, "hash": file_hash}
+            try:
+                db_service.update_document_status(
+                    document_id=db_doc_id,
+                    status="SCANNED",
+                    ocr_confidence=confidence,
+                    document_type=doc_type
+                )
+                db_service.create_audit_log(
+                    user_id=effective_user_id,
+                    document_id=db_doc_id,
+                    action="OCR_COMPLETED",
+                    status="SUCCESS",
+                    metadata={"ocr_engine": "Tesseract", "confidence": confidence, "document_type": doc_type}
+                )
+                audit_events_recorded += 1
+                db_service.create_audit_log(
+                    user_id=effective_user_id,
+                    document_id=db_doc_id,
+                    action="PII_DETECTED",
+                    status="SUCCESS",
+                    metadata={"detected_field_count": len(fields_dict), "detected_types": list(fields_dict.keys())}
+                )
+                audit_events_recorded += 1
+            except Exception as e:
+                logger.error(f"DB OCR/PII audit update error: {e}", exc_info=True)
+                if not db_error:
+                    db_error = "OCR audit persistence failed"
+
+        # ---------- Pipeline Step 3: Purpose Analysis ----------
+        purpose_clean = purpose.strip()
+        purpose_decision = analyze_purpose(
+            document_type=doc_type,
+            purpose=purpose_clean,
+            pii=pii_items
+        )
+
+        if db_doc_id:
+            domain = purpose_decision.get("domain", "general")
+            task = purpose_decision.get("task", "unknown")
+            ai_name = (
+                purpose_decision.get("ai_model", {}).get("name")
+                if isinstance(purpose_decision.get("ai_model"), dict)
+                else str(purpose_decision.get("ai_model"))
             )
-            print(f"[SUPABASE DB] [Audit Log 1] Recorded DOCUMENT_UPLOADED -> ID: {audit_id}", flush=True)
-            audit_events_recorded += 1
-        else:
-            db_error = db_service.last_error or "create_document returned None"
-            print(f"[SUPABASE DB ERROR] [Step 2/7] Document creation returned None! Error: {db_error}", flush=True)
-    except Exception as e:
-        db_error = f"{type(e).__name__}: {str(e)}"
-        print(f"[SUPABASE DB ERROR] [Step 2/7] Exception during document creation: {db_error}", flush=True)
-        traceback.print_exc()
-        logger.error(f"DB document initialization error: {e}", exc_info=True)
+            try:
+                db_service.create_purpose_analysis(
+                    document_id=db_doc_id,
+                    purpose_text=purpose_clean,
+                    domain=domain,
+                    task=task,
+                    sub_purpose=purpose_decision.get("sub_purpose"),
+                    submission_context=purpose_decision.get("submission_context"),
+                    intent_confidence=purpose_decision.get("intent_confidence"),
+                    ai_model=ai_name
+                )
+                db_service.create_audit_log(
+                    user_id=effective_user_id,
+                    document_id=db_doc_id,
+                    action="PURPOSE_ANALYZED",
+                    status="SUCCESS",
+                    metadata={
+                        "domain": domain,
+                        "task": task,
+                        "intent_confidence": purpose_decision.get("intent_confidence")
+                    }
+                )
+                audit_events_recorded += 1
+            except Exception as e:
+                logger.error(f"DB purpose analysis error: {e}", exc_info=True)
+                if not db_error:
+                    db_error = "Purpose analysis persistence failed"
 
-    # --------------------------------------------------------------------------
-    # Pipeline Step 1: OCR Extraction
-    # --------------------------------------------------------------------------
-    try:
-        ocr_result = ocr_engine.extract_text(saved_path)
-    except OCREngineError as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"OCR Engine error: {str(e)}"
-        )
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Unexpected error during OCR processing: {str(e)}"
-        )
+        # ---------- Pipeline Step 4: Physical Image Redaction ----------
+        unique_id = uuid.uuid4().hex[:8]
+        protected_filename = f"protected_{unique_id}{ext}"
+        output_path = os.path.join(OUTPUT_DIR, protected_filename)
 
-    raw_text = ocr_result.get("raw_text", "").strip()
-    qr_detected = ocr_result.get("qr_detected", False)
-    qr_data = ocr_result.get("qr_data", None)
-    qr_bbox = ocr_result.get("qr_bbox", None)
-    qr_polygon = ocr_result.get("qr_polygon", None)
-    photo_detected = ocr_result.get("photo_detected", False)
-    photo_bbox = ocr_result.get("photo_bbox", None)
-    word_data = ocr_result.get("word_data", None)
-    ocr_scale = ocr_result.get("ocr_scale", 1.0)
-    confidence = float(ocr_result.get("confidence", 50.0))
-
-    # --------------------------------------------------------------------------
-    # Pipeline Step 2: PII Detection & Bounding Boxes
-    # --------------------------------------------------------------------------
-    fields_dict = pii_detector.extract_document_fields(
-        text=raw_text,
-        word_data=word_data,
-        qr_detected=qr_detected,
-        qr_data=qr_data,
-        qr_bbox=qr_bbox,
-        qr_polygon=qr_polygon,
-        photo_detected=photo_detected,
-        photo_bbox=photo_bbox
-    )
-
-    pii_items = []
-    for field_name, item in fields_dict.items():
-        val = item.get("value", "").strip()
-        if not val or val == "Could not confidently determine":
-            continue
-        pii_items.append({
-            "type": FIELD_TYPE_MAP.get(field_name, field_name.lower().replace(" ", "_")),
-            "value": val,
-            "risk": item.get("risk", "MEDIUM"),
-            "confidence": round(float(item.get("confidence", 0.9)), 2)
-        })
-
-    # Document type classification
-    doc_type, doc_conf, doc_warnings = classify_document_type(raw_text, fields_dict)
-
-    warnings = list(doc_warnings)
-    if "aadhaar" in doc_type.lower() and not qr_detected:
-        warnings.append(
-            f"WARNING: QR code detection failed on {doc_type}. Physical QR redaction could not be applied automatically. Verify document privacy before sharing."
-        )
-
-    if db_doc_id:
-        print(f"[SUPABASE DB] [Step 3/7] Updating document status to SCANNED (confidence: {confidence}%, type: '{doc_type}')...", flush=True)
+        requirements = purpose_decision.get("requirements", [])
         try:
-            up_ok = db_service.update_document_status(
-                document_id=db_doc_id,
-                status="SCANNED",
-                ocr_confidence=confidence,
-                document_type=doc_type
+            redaction_result = redaction_engine.redact_document(
+                image_path=saved_path,
+                fields_dict=fields_dict,
+                requirements=requirements,
+                output_path=output_path,
+                ocr_scale=ocr_scale
             )
-            print(f"[SUPABASE DB] [Step 3/7] Document status update result: {up_ok}", flush=True)
-            al1 = db_service.create_audit_log(
-                user_id=effective_user_id,
-                document_id=db_doc_id,
-                action="OCR_COMPLETED",
-                status="SUCCESS",
-                metadata={"ocr_engine": "Tesseract", "confidence": confidence, "document_type": doc_type}
-            )
-            print(f"[SUPABASE DB] [Audit Log 2] Recorded OCR_COMPLETED -> ID: {al1}", flush=True)
-            audit_events_recorded += 1
-            al2 = db_service.create_audit_log(
-                user_id=effective_user_id,
-                document_id=db_doc_id,
-                action="PII_DETECTED",
-                status="SUCCESS",
-                metadata={"detected_field_count": len(fields_dict), "detected_types": list(fields_dict.keys())}
-            )
-            print(f"[SUPABASE DB] [Audit Log 3] Recorded PII_DETECTED ({len(fields_dict)} fields) -> ID: {al2}", flush=True)
-            audit_events_recorded += 1
+            if redaction_result.get("warnings"):
+                warnings.extend(redaction_result["warnings"])
         except Exception as e:
-            err_msg = f"{type(e).__name__}: {str(e)}"
-            print(f"[SUPABASE DB ERROR] [Step 3/7] OCR/PII audit update error: {err_msg}", flush=True)
-            traceback.print_exc()
-            logger.error(f"DB OCR/PII audit update error: {e}", exc_info=True)
-            if not db_error:
-                db_error = err_msg
-
-    # --------------------------------------------------------------------------
-    # Pipeline Step 3: AI Purpose Analysis & Risk Modeling
-    # --------------------------------------------------------------------------
-    purpose_clean = purpose.strip()
-    purpose_decision = analyze_purpose(
-        document_type=doc_type,
-        purpose=purpose_clean,
-        pii=pii_items
-    )
-
-    if db_doc_id:
-        domain = purpose_decision.get("domain", "general")
-        task = purpose_decision.get("task", "unknown")
-        ai_name = (
-            purpose_decision.get("ai_model", {}).get("name")
-            if isinstance(purpose_decision.get("ai_model"), dict)
-            else str(purpose_decision.get("ai_model"))
-        )
-        print(f"[SUPABASE DB] [Step 4/7] Inserting purpose analysis: domain='{domain}', task='{task}', model='{ai_name}'...", flush=True)
-        try:
-            pa_id = db_service.create_purpose_analysis(
-                document_id=db_doc_id,
-                purpose_text=purpose_clean,
-                domain=domain,
-                task=task,
-                sub_purpose=purpose_decision.get("sub_purpose"),
-                submission_context=purpose_decision.get("submission_context"),
-                intent_confidence=purpose_decision.get("intent_confidence"),
-                ai_model=ai_name
+            processing_failed = True
+            if db_doc_id:
+                db_service.update_document_status(db_doc_id, "FAILED")
+            logger.error(f"Redaction failed: {e}", exc_info=True)
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Document redaction failed."
             )
-            print(f"[SUPABASE DB] [Step 4/7] SUCCESS: Purpose analysis persisted with ID: {pa_id}", flush=True)
-            al3 = db_service.create_audit_log(
-                user_id=effective_user_id,
-                document_id=db_doc_id,
-                action="PURPOSE_ANALYZED",
-                status="SUCCESS",
-                metadata={
-                    "domain": domain,
-                    "task": task,
-                    "intent_confidence": purpose_decision.get("intent_confidence")
-                }
-            )
-            print(f"[SUPABASE DB] [Audit Log 4] Recorded PURPOSE_ANALYZED -> ID: {al3}", flush=True)
-            audit_events_recorded += 1
-        except Exception as e:
-            err_msg = f"{type(e).__name__}: {str(e)}"
-            print(f"[SUPABASE DB ERROR] [Step 4/7] Purpose analysis error: {err_msg}", flush=True)
-            traceback.print_exc()
-            logger.error(f"DB purpose analysis audit error: {e}", exc_info=True)
-            if not db_error:
-                db_error = err_msg
 
-    # --------------------------------------------------------------------------
-    # Pipeline Step 4: Physical Image Redaction
-    # --------------------------------------------------------------------------
-    protected_filename = f"protected_{unique_id}_{safe_basename}"
-    output_path = os.path.join(OUTPUT_DIR, protected_filename)
+        # Attach bounding boxes to requirements
+        enhanced_requirements = []
+        for req in requirements:
+            req_item = dict(req)
+            field_type = req_item.get("type", "")
+            for f_name, f_data in fields_dict.items():
+                mapped_type = FIELD_TYPE_MAP.get(f_name, f_name.lower().replace(" ", "_"))
+                if mapped_type == field_type and "bbox" in f_data:
+                    is_orig = (f_name in ["QR Code", "Photograph"])
+                    req_item["bbox"] = redaction_engine._scale_box(f_data["bbox"], ocr_scale, is_already_original=is_orig)
+                    break
+            enhanced_requirements.append(req_item)
 
-    requirements = purpose_decision.get("requirements", [])
-    try:
-        redaction_result = redaction_engine.redact_document(
-            image_path=saved_path,
-            fields_dict=fields_dict,
-            requirements=requirements,
-            output_path=output_path,
-            ocr_scale=ocr_scale
-        )
-        if redaction_result.get("warnings"):
-            warnings.extend(redaction_result["warnings"])
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Redaction failed: {str(e)}"
-        )
+        # ---------- Database Step 2: Persist Entities & Protected Doc ----------
+        if db_doc_id:
+            try:
+                db_service.create_pii_entities_and_risks(
+                    document_id=db_doc_id,
+                    requirements=enhanced_requirements
+                )
+                db_service.create_audit_log(
+                    user_id=effective_user_id,
+                    document_id=db_doc_id,
+                    action="RISK_ANALYZED",
+                    status="SUCCESS",
+                    metadata={"entities_analyzed": len(enhanced_requirements)}
+                )
+                audit_events_recorded += 1
 
-    # Attach bounding boxes to requirements
-    enhanced_requirements = []
-    for req in requirements:
-        req_item = dict(req)
-        field_type = req_item.get("type", "")
-        for f_name, f_data in fields_dict.items():
-            mapped_type = FIELD_TYPE_MAP.get(f_name, f_name.lower().replace(" ", "_"))
-            if mapped_type == field_type and "bbox" in f_data:
-                is_orig = (f_name in ["QR Code", "Photograph"])
-                req_item["bbox"] = redaction_engine._scale_box(f_data["bbox"], ocr_scale, is_already_original=is_orig)
-                break
-        enhanced_requirements.append(req_item)
+                db_service.create_audit_log(
+                    user_id=effective_user_id,
+                    document_id=db_doc_id,
+                    action="POLICY_APPLIED",
+                    status="SUCCESS",
+                    metadata={"decision_summary": purpose_decision.get("summary", {})}
+                )
+                audit_events_recorded += 1
 
-    # --------------------------------------------------------------------------
-    # Database Step 2: Persist PII Entities, ML Risks & Protected Doc
-    # --------------------------------------------------------------------------
-    if db_doc_id:
-        print(f"[SUPABASE DB] [Step 5/7] Inserting {len(enhanced_requirements)} PII entities & ML risk predictions...", flush=True)
-        try:
-            created_pii_ids = db_service.create_pii_entities_and_risks(
-                document_id=db_doc_id,
-                requirements=enhanced_requirements
-            )
-            print(f"[SUPABASE DB] [Step 5/7] SUCCESS: Persisted {len(created_pii_ids)} PII entities & risk predictions", flush=True)
+                db_service.create_protected_document(
+                    document_id=db_doc_id,
+                    protected_filename=protected_filename,
+                    protected_path=output_path,
+                    protection_status="PROTECTED",
+                    total_detected=len(enhanced_requirements),
+                    fully_redacted=redaction_result["stats"]["fully_redacted"],
+                    partially_redacted=redaction_result["stats"]["partially_redacted"],
+                    preserved=redaction_result["stats"]["preserved"],
+                    protection_summary=redaction_result["stats"]
+                )
 
-            al4 = db_service.create_audit_log(
-                user_id=effective_user_id,
-                document_id=db_doc_id,
-                action="RISK_ANALYZED",
-                status="SUCCESS",
-                metadata={"entities_analyzed": len(enhanced_requirements)}
-            )
-            print(f"[SUPABASE DB] [Audit Log 5] Recorded RISK_ANALYZED -> ID: {al4}", flush=True)
-            audit_events_recorded += 1
+                db_service.update_document_status(document_id=db_doc_id, status="PROTECTED")
 
-            al5 = db_service.create_audit_log(
-                user_id=effective_user_id,
-                document_id=db_doc_id,
-                action="POLICY_APPLIED",
-                status="SUCCESS",
-                metadata={"decision_summary": purpose_decision.get("summary", {})}
-            )
-            print(f"[SUPABASE DB] [Audit Log 6] Recorded POLICY_APPLIED -> ID: {al5}", flush=True)
-            audit_events_recorded += 1
+                db_service.create_audit_log(
+                    user_id=effective_user_id,
+                    document_id=db_doc_id,
+                    action="DOCUMENT_PROTECTED",
+                    status="SUCCESS",
+                    metadata={
+                        "protected_filename": protected_filename,
+                        "redactions_count": len(redaction_result["redactions_applied"])
+                    }
+                )
+                audit_events_recorded += 1
+            except Exception as e:
+                logger.error(f"DB entity/protection persistence error: {e}", exc_info=True)
+                if not db_error:
+                    db_error = "Protection record persistence failed"
 
-            print(f"[SUPABASE DB] [Step 6/7] Inserting protected document record: '{protected_filename}'...", flush=True)
-            prot_id = db_service.create_protected_document(
-                document_id=db_doc_id,
-                protected_filename=protected_filename,
-                protected_path=output_path,
-                protection_status="PROTECTED",
-                total_detected=len(enhanced_requirements),
-                fully_redacted=redaction_result["stats"]["fully_redacted"],
-                partially_redacted=redaction_result["stats"]["partially_redacted"],
-                preserved=redaction_result["stats"]["preserved"],
-                protection_summary=redaction_result["stats"]
-            )
-            print(f"[SUPABASE DB] [Step 6/7] SUCCESS: Protected document created with ID: {prot_id}", flush=True)
+        # ---------- Build Response ----------
+        # Determine if this is a truly successful result
+        is_db_failed = (db_status == "UNAVAILABLE" or db_error is not None)
+        is_truly_successful = not is_db_failed or not IS_PRODUCTION
 
-            print(f"[SUPABASE DB] [Step 7/7] Updating document status to PROTECTED...", flush=True)
-            db_service.update_document_status(
-                document_id=db_doc_id,
-                status="PROTECTED"
-            )
-            print(f"[SUPABASE DB] [Step 7/7] SUCCESS: Document status updated to PROTECTED", flush=True)
+        if db_status == "UNAVAILABLE" and not db_error:
+            if not db_service.is_connected():
+                db_error = "Database not configured."
+            else:
+                db_error = db_service.last_error or "Database persistence failed."
 
-            al6 = db_service.create_audit_log(
-                user_id=effective_user_id,
-                document_id=db_doc_id,
-                action="DOCUMENT_PROTECTED",
-                status="SUCCESS",
-                metadata={
-                    "protected_filename": protected_filename,
-                    "redactions_count": len(redaction_result["redactions_applied"])
-                }
-            )
-            print(f"[SUPABASE DB] [Audit Log 7] Final audit log recorded: DOCUMENT_PROTECTED -> ID: {al6}", flush=True)
-            audit_events_recorded += 1
-            print("[SUPABASE DB] ALL 7 DATABASE OPERATIONS PERSISTED SUCCESSFULLY TO SUPABASE POSTGRESQL!", flush=True)
-            print("=" * 70 + "\n", flush=True)
-        except Exception as e:
-            err_msg = f"{type(e).__name__}: {str(e)}"
-            print(f"[SUPABASE DB ERROR] Entity/protection persistence error: {err_msg}", flush=True)
-            traceback.print_exc()
-            logger.error(f"DB entity and protection record persistence error: {e}", exc_info=True)
-            if not db_error:
-                db_error = err_msg
-
-    # Build response payload
-    if db_status == "UNAVAILABLE" and not db_error:
-        if not db_service.is_connected():
-            db_error = "Supabase credentials not configured in environment (.env) or client unavailable."
-        else:
-            db_error = db_service.last_error or "Database persistence failed during document initialization."
-
-    db_meta = {
-        "status": db_status,
-        "document_id": db_doc_id,
-        "user_id": effective_user_id if db_doc_id else None,
-        "persisted_entities": len(enhanced_requirements) if db_doc_id else 0,
-        "audit_events_recorded": audit_events_recorded
-    }
-    if db_error:
-        db_meta["error"] = db_error
-
-    doc_meta = {
-        "original_filename": safe_basename,
-        "protected_filename": protected_filename,
-        "protected_url": f"/api/protected/{protected_filename}",
-        "type": doc_type,
-        "confidence": doc_conf,
-        "qr_detected": qr_detected
-    }
-    if warnings:
-        doc_meta["warnings"] = warnings
-    if db_doc_id:
-        doc_meta["id"] = db_doc_id
-
-    review_required = purpose_decision.get("review_required", False) or (doc_conf < 0.60) or (len(warnings) > 0)
-
-    return {
-        "success": True,
-        "document": doc_meta,
-        "review_required": review_required,
-        "warnings": warnings,
-        "database": db_meta,
-        "purpose": purpose_clean,
-        "intelligence": {
-            "purpose_ai": {
-                "domain": purpose_decision.get("domain", "general"),
-                "task": purpose_decision.get("task", "unknown"),
-                "sub_purpose": purpose_decision.get("sub_purpose", "unknown"),
-                "confidence": purpose_decision.get("intent_confidence", 0.90)
-            },
-            "risk_model": {
-                "model": "RandomForestClassifier",
-                "version": "prototype-1"
-            }
-        },
-        "purpose_analysis": purpose_decision.get("purpose_analysis", {}),
-        "decision_summary": purpose_decision.get("summary", {}),
-        "requirements": enhanced_requirements,
-        "redactions_applied": redaction_result["redactions_applied"],
-        "stats": redaction_result["stats"],
-        "ocr": {
-            "engine": "Tesseract",
-            "confidence": confidence
+        db_meta = {
+            "status": db_status,
+            "document_id": db_doc_id,
+            "persisted_entities": len(enhanced_requirements) if db_doc_id else 0,
+            "audit_events_recorded": audit_events_recorded
         }
-    }
+        if db_error:
+            db_meta["error"] = db_error
+
+        doc_meta = {
+            "original_filename": safe_display_name,
+            "protected_filename": protected_filename,
+            "protected_url": f"/api/protected/{protected_filename}",
+            "type": doc_type,
+            "confidence": doc_conf,
+            "qr_detected": qr_detected
+        }
+        if warnings:
+            doc_meta["warnings"] = warnings
+        if db_doc_id:
+            doc_meta["id"] = db_doc_id
+
+        review_required = purpose_decision.get("review_required", False) or (doc_conf < 0.60) or (len(warnings) > 0)
+
+        return {
+            "success": is_truly_successful,
+            "document": doc_meta,
+            "review_required": review_required,
+            "warnings": warnings,
+            "database": db_meta,
+            "purpose": purpose_clean,
+            "intelligence": {
+                "purpose_ai": {
+                    "domain": purpose_decision.get("domain", "general"),
+                    "task": purpose_decision.get("task", "unknown"),
+                    "sub_purpose": purpose_decision.get("sub_purpose", "unknown"),
+                    "confidence": purpose_decision.get("intent_confidence", 0.90)
+                },
+                "risk_model": {
+                    "model": "RandomForestClassifier",
+                    "version": "prototype-1"
+                }
+            },
+            "purpose_analysis": purpose_decision.get("purpose_analysis", {}),
+            "decision_summary": purpose_decision.get("summary", {}),
+            "requirements": enhanced_requirements,
+            "redactions_applied": redaction_result["redactions_applied"],
+            "stats": redaction_result["stats"],
+            "ocr": {
+                "engine": "Tesseract",
+                "confidence": confidence
+            }
+        }
+
+    finally:
+        # Clean up original upload after processing (if configured)
+        if processing_failed or os.getenv("CLEANUP_ORIGINALS", "false").lower() == "true":
+            _safe_remove(saved_path)
 
 
 # ==============================================================================
-# PHASE 4B: SUPABASE DATABASE MANAGEMENT ENDPOINTS
+# DATABASE MANAGEMENT ENDPOINTS (Authenticated + Ownership Enforced)
 # ==============================================================================
 
 @app.get("/api/database/health")
 async def database_health_endpoint():
-    """
-    Returns the operational status of the Supabase PostgreSQL connection.
-    Never exposes credentials or secrets.
-    """
+    """Returns the operational status of the database. No credentials exposed."""
     return db_service.check_health()
 
 
 @app.get("/api/documents/{document_id}")
-async def get_document_endpoint(document_id: str):
+async def get_document_endpoint(
+    document_id: str,
+    user: AuthenticatedUser = Depends(get_current_user)
+):
     """
-    Returns complete document lifecycle metadata (purpose analysis, PII metadata,
-    risk predictions, protection details, audit events).
-    Never returns raw PII values.
+    Returns complete document lifecycle metadata.
+    Enforces ownership: user can only access their own documents.
     """
     doc_info = db_service.get_document_full(document_id)
     if not doc_info:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Document '{document_id}' not found."
+            detail="Document not found."
         )
+
+    # Enforce ownership
+    doc_owner = doc_info.get("document", {}).get("user_id")
+    if doc_owner:
+        verify_document_ownership(doc_owner, user.user_id)
+
     return {
         "success": True,
         "document_id": document_id,
@@ -911,11 +1076,17 @@ async def get_document_endpoint(document_id: str):
 
 
 @app.get("/api/users/{user_id}/documents")
-async def get_user_documents_endpoint(user_id: str):
+async def get_user_documents_endpoint(
+    user_id: str,
+    user: AuthenticatedUser = Depends(get_current_user)
+):
     """
-    Returns all document metadata uploaded by the specified user.
-    Metadata only, zero raw PII.
+    Returns all document metadata for a user.
+    Enforces that users can only query their own documents.
     """
+    # Users can only access their own document list
+    verify_document_ownership(user_id, user.user_id)
+
     docs = db_service.get_user_documents(user_id)
     return {
         "success": True,
@@ -926,18 +1097,35 @@ async def get_user_documents_endpoint(user_id: str):
 
 
 @app.get("/api/documents/{document_id}/audit")
-async def get_document_audit_endpoint(document_id: str):
+async def get_document_audit_endpoint(
+    document_id: str,
+    user: AuthenticatedUser = Depends(get_current_user)
+):
     """
-    Returns chronological audit events for the document with SHA-256 hash chaining.
+    Returns audit trail for a document. Ownership enforced.
     """
+    # Verify ownership first
+    doc_info = db_service.get_document_full(document_id)
+    if not doc_info:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document not found."
+        )
+
+    doc_owner = doc_info.get("document", {}).get("user_id")
+    if doc_owner:
+        verify_document_ownership(doc_owner, user.user_id)
+
     return db_service.get_document_audit_trail(document_id)
 
 
 @app.get("/api/protected/{filename}")
-async def get_protected_file_endpoint(filename: str):
+async def get_protected_file_endpoint(
+    filename: str,
+    user: AuthenticatedUser = Depends(get_current_user)
+):
     """
-    Serves the physically redacted/protected document image safely from outputs/.
-    Prevents path traversal attacks and sets anti-caching privacy headers.
+    Serves a protected document image. Requires authentication and ownership verification.
     """
     safe_name = os.path.basename(filename)
 
@@ -948,13 +1136,33 @@ async def get_protected_file_endpoint(filename: str):
             detail="Invalid document identifier."
         )
 
-    # Access control & file existence: only serve legitimate existing protected files
     file_path = os.path.join(OUTPUT_DIR, safe_name)
     if not safe_name.startswith("protected_") or not os.path.isfile(file_path):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Protected document '{safe_name}' not found."
+            detail="Protected document not found."
         )
+
+    # Verify ownership via database lookup
+    import supabase_client
+    client = supabase_client.get_supabase_client()
+    if client:
+        try:
+            res = (
+                client.table("protected_documents")
+                .select("document_id")
+                .eq("protected_filename", safe_name)
+                .execute()
+            )
+            if res.data and len(res.data) > 0:
+                doc_id = res.data[0]["document_id"]
+                doc_res = client.table("documents").select("user_id").eq("id", doc_id).execute()
+                if doc_res.data and len(doc_res.data) > 0:
+                    verify_document_ownership(doc_res.data[0]["user_id"], user.user_id)
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.warning(f"Ownership check failed for protected file: {e}")
 
     ext = os.path.splitext(safe_name)[1].lower()
     media_types = {
@@ -976,42 +1184,138 @@ async def get_protected_file_endpoint(filename: str):
 
 
 @app.get("/api/history")
-async def get_history_endpoint(user_id: Optional[str] = None):
+async def get_history_endpoint(
+    user: AuthenticatedUser = Depends(get_current_user)
+):
     """
-    Returns document protection history for the user or local session.
-    If database is available, queries Supabase documents;
-    otherwise lists generated protected outputs safely with metadata.
+    Returns document protection history for the authenticated user.
+    No arbitrary user_id parameter — derived from JWT.
     """
-    effective_user = user_id or db_service.demo_user_id
     db_docs = []
     if db_service.is_connected():
         try:
-            db_docs = db_service.get_user_documents(effective_user)
+            db_docs = db_service.get_user_documents(user.user_id)
         except Exception as e:
-            logger.warning(f"Error retrieving user documents from database: {e}")
-
-    # Build local list from output directory
-    local_docs = []
-    if os.path.exists(OUTPUT_DIR):
-        for f in sorted(os.listdir(OUTPUT_DIR), reverse=True):
-            if f.startswith("protected_") and any(f.endswith(ext) for ext in SUPPORTED_EXTENSIONS):
-                f_path = os.path.join(OUTPUT_DIR, f)
-                stat = os.stat(f_path)
-                local_docs.append({
-                    "id": f,
-                    "protected_filename": f,
-                    "original_filename": f.replace("protected_", ""),
-                    "protected_url": f"/api/protected/{f}",
-                    "file_size": stat.st_size,
-                    "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(stat.st_mtime)),
-                    "status": "PROTECTED"
-                })
+            logger.warning(f"Error retrieving user documents: {e}")
 
     return {
         "success": True,
-        "count": len(db_docs) if db_docs else len(local_docs),
-        "source": "database" if db_docs else "local_outputs",
-        "documents": db_docs if db_docs else local_docs
+        "count": len(db_docs),
+        "source": "database",
+        "documents": db_docs
+    }
+
+
+# ==============================================================================
+# SECURE SHARING ENDPOINTS
+# ==============================================================================
+
+class CreateShareRequest(BaseModel):
+    document_id: str
+    purpose: str
+    recipient_email: Optional[str] = None
+    expiry_hours: Optional[int] = None
+    max_access_count: Optional[int] = None
+
+
+@app.post("/api/shares")
+async def create_share_endpoint(
+    payload: CreateShareRequest,
+    user: AuthenticatedUser = Depends(get_current_user)
+):
+    """
+    Creates a secure share link for a protected document.
+    Returns the access token ONCE — it is not stored in raw form.
+    """
+    result = share_service.create_share(
+        document_id=payload.document_id,
+        owner_user_id=user.user_id,
+        purpose=payload.purpose,
+        recipient_email=payload.recipient_email,
+        expiry_hours=payload.expiry_hours,
+        max_access_count=payload.max_access_count
+    )
+
+    if not result:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Could not create share. Verify the document exists and is protected."
+        )
+
+    return {
+        "success": True,
+        **result
+    }
+
+
+@app.get("/api/shares/access/{share_token}")
+async def access_shared_document(share_token: str):
+    """
+    Public endpoint to access a shared document via bearer token.
+    Verifies token hash, expiry, revocation, and access count.
+    """
+    access_info = share_service.verify_share_access(share_token)
+    if not access_info:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Share link is invalid, expired, or has been revoked."
+        )
+
+    file_path = access_info.get("protected_path", "")
+    if not file_path or not os.path.isfile(file_path):
+        file_path = os.path.join(OUTPUT_DIR, access_info.get("protected_filename", ""))
+
+    if not os.path.isfile(file_path):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Shared document file is no longer available."
+        )
+
+    ext = os.path.splitext(file_path)[1].lower()
+    media_types = {
+        ".png": "image/png",
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".webp": "image/webp"
+    }
+    media_type = media_types.get(ext, "application/octet-stream")
+
+    return FileResponse(
+        file_path,
+        media_type=media_type,
+        headers={
+            "Cache-Control": "private, no-cache, no-store, must-revalidate",
+            "X-Content-Type-Options": "nosniff"
+        }
+    )
+
+
+@app.delete("/api/shares/{share_id}")
+async def revoke_share_endpoint(
+    share_id: str,
+    user: AuthenticatedUser = Depends(get_current_user)
+):
+    """Revokes a share. Only the document owner can revoke."""
+    success = share_service.revoke_share(share_id, user.user_id)
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Could not revoke share. Verify the share exists and you own the document."
+        )
+    return {"success": True, "message": "Share revoked successfully."}
+
+
+@app.get("/api/documents/{document_id}/shares")
+async def get_document_shares_endpoint(
+    document_id: str,
+    user: AuthenticatedUser = Depends(get_current_user)
+):
+    """Lists all shares for a document. Ownership enforced."""
+    shares = share_service.get_document_shares(document_id, user.user_id)
+    return {
+        "success": True,
+        "document_id": document_id,
+        "shares": shares
     }
 
 

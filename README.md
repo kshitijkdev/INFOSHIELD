@@ -143,6 +143,17 @@ powershell -ExecutionPolicy Bypass -File scripts\verify_system.ps1
 
 ## 6. Security Principles
 
-- **Zero-Trust Physical Redaction**: Unnecessary PII is physically blurred (Gaussian blur) and QR codes are irreversibly pixelated before writing to disk.
+- **Zero-Trust Physical Redaction**: Unnecessary PII is concealed via irreversible opaque solid pixel masks and QR codes are irreversibly pixelated before writing to disk. Reversible blur is strictly rejected.
+- **Supabase JWT Authentication**: Server-side JWT signature verification and ownership validation on all document queries and file downloads.
+- **Cryptographic Document Sharing**: Time-bound, single-use, or recipient-restricted high-entropy bearer tokens stored as SHA-256 hashes with full revocation capabilities.
 - **Credential Isolation**: Database service-role keys are kept exclusively backend-side in `.env` and are excluded from Git.
-- **Zero Client Leaks**: Raw OCR text and unredacted PII values are never logged to browser consoles.
+- **Zero Client Leaks**: Raw OCR text and unredacted PII values are never logged or exposed in client responses.
+
+---
+
+## 7. Security Audit & Deployment Documentation
+
+- [Final Security Audit Report](docs/FINAL_AUDIT_REPORT.md)
+- [Production Deployment Guide](docs/DEPLOYMENT.md)
+- [REST API Reference](docs/api.md)
+
