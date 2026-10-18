@@ -1,10 +1,13 @@
 # InfoShield Backend — Production Container for Render / Cloud Hosting
 FROM python:3.11-slim
 
-# System dependencies: Tesseract OCR (with English training data), curl, and image libraries
+# System dependencies: Tesseract OCR, ZBar (barcodes), OpenCV runtime libs, curl
 RUN apt-get update && apt-get install -y --no-install-recommends \
     tesseract-ocr \
     tesseract-ocr-eng \
+    libzbar0 \
+    libgl1 \
+    libglib2.0-0 \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
