@@ -415,7 +415,7 @@
 
   function syncNavHighlight(screenId) {
     // Determine active nav key
-    let navKey = 'select';
+    let navKey = 'home';
     if (screenId === 'screen-history') navKey = 'history';
     else if (screenId === 'screen-profile') navKey = 'profile';
 
@@ -1579,27 +1579,23 @@
 
     // Sidebar Links
     const sidebarNavHome = document.getElementById('sidebarNavHome');
-    const sidebarNavDocs = document.getElementById('sidebarNavDocs');
     const sidebarNavProtected = document.getElementById('sidebarNavProtected');
-    const sidebarNavHistory = document.getElementById('sidebarNavHistory');
+    const sidebarNavProfile = document.getElementById('sidebarNavProfile');
     const sidebarUserProfileBtn = document.getElementById('sidebarUserProfileBtn');
     const sidebarSettingsBtn = document.getElementById('sidebarSettingsBtn');
 
     if (sidebarNavHome) sidebarNavHome.onclick = (e) => { e.preventDefault(); navigateTo('screen-select'); };
-    if (sidebarNavDocs) sidebarNavDocs.onclick = (e) => { e.preventDefault(); navigateTo('screen-select'); };
     if (sidebarNavProtected) sidebarNavProtected.onclick = (e) => { e.preventDefault(); navigateTo('screen-history'); };
-    if (sidebarNavHistory) sidebarNavHistory.onclick = (e) => { e.preventDefault(); navigateTo('screen-history'); };
+    if (sidebarNavProfile) sidebarNavProfile.onclick = (e) => { e.preventDefault(); navigateTo('screen-profile'); };
     if (sidebarUserProfileBtn) sidebarUserProfileBtn.onclick = () => navigateTo('screen-profile');
     if (sidebarSettingsBtn) sidebarSettingsBtn.onclick = () => navigateTo('screen-profile');
 
     // Mobile Bottom Nav Links
     const bottomNavHome = document.getElementById('bottomNavHome');
-    const bottomNavDocs = document.getElementById('bottomNavDocs');
     const bottomNavHistory = document.getElementById('bottomNavHistory');
     const bottomNavProfile = document.getElementById('bottomNavProfile');
 
     if (bottomNavHome) bottomNavHome.onclick = (e) => { e.preventDefault(); navigateTo('screen-select'); };
-    if (bottomNavDocs) bottomNavDocs.onclick = (e) => { e.preventDefault(); navigateTo('screen-select'); };
     if (bottomNavHistory) bottomNavHistory.onclick = (e) => { e.preventDefault(); navigateTo('screen-history'); };
     if (bottomNavProfile) bottomNavProfile.onclick = (e) => { e.preventDefault(); navigateTo('screen-profile'); };
 
