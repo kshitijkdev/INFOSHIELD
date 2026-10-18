@@ -9,6 +9,7 @@ Extracts dynamically from OCR output and document layout geometry.
 """
 
 import re
+import numpy as np
 from typing import List, Dict, Any, Optional
 from collections import OrderedDict
 

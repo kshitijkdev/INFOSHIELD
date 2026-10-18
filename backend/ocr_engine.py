@@ -513,35 +513,99 @@ class OCREngine:
         6. Selection of best variant based on quality heuristic
         """
         if not self.is_available or pytesseract is None:
-            # When Tesseract binary is not yet installed on the host machine (common on local Windows dev),
-            # run OpenCV-based image analysis and computer vision detection so processing succeeds.
-            logger.warning(
-                "Tesseract binary is not installed on this host. Falling back to OpenCV image & QR detection."
-            )
+            # Fallback when Tesseract C++ executable is not installed on host
+            logger.info("Using EasyOCR & OpenCV for document OCR text and bounding boxes.")
             img_bgr = self.load_image(image_path)
             h, w, c = img_bgr.shape
             qr_info = self.detect_qr_code(img_bgr)
-            photo_info = self.detect_photograph(img_bgr, word_data=None, qr_bbox=qr_info.get("bbox"))
+
+            # Try PyZbar if OpenCV QR didn't detect
+            if not qr_info.get("detected"):
+                try:
+                    from pyzbar.pyzbar import decode as pyzbar_decode
+                    from PIL import Image as PILImg
+                    zbar_res = pyzbar_decode(PILImg.open(image_path))
+                    if zbar_res:
+                        rect = zbar_res[0].rect
+                        qr_info["detected"] = True
+                        qr_info["data"] = zbar_res[0].data.decode("utf-8", errors="ignore")
+                        qr_info["bbox"] = {"x": rect.left, "y": rect.top, "width": rect.width, "height": rect.height}
+                except Exception:
+                    pass
+
             scale = (1400.0 / w) if w < 1200 else 1.0
 
-            # Generate basic document structure text from QR data or metadata
-            fallback_text = qr_info.get("data") or ""
+            extracted_words = []
+            word_data = {
+                "text": [],
+                "conf": [],
+                "left": [],
+                "top": [],
+                "width": [],
+                "height": []
+            }
+
+            try:
+                import easyocr
+                reader = easyocr.Reader(['en'], gpu=False, verbose=False)
+                ocr_results = reader.readtext(img_bgr)
+                for item in ocr_results:
+                    box, text_line, conf = item
+                    text_str = str(text_line).strip()
+                    if not text_str:
+                        continue
+                    extracted_words.append(text_str)
+
+                    # Calculate bounding rectangle from polygon points
+                    xs = [int(p[0]) for p in box]
+                    ys = [int(p[1]) for p in box]
+                    bx = min(xs)
+                    by = min(ys)
+                    bw = max(xs) - bx
+                    bh = max(ys) - by
+
+                    # Split multi-word lines into individual tokens
+                    tokens = text_str.split()
+                    if len(tokens) > 1:
+                        avg_token_w = max(1, bw // len(tokens))
+                        for idx, tok in enumerate(tokens):
+                            tok_x = bx + (idx * avg_token_w)
+                            word_data["text"].append(tok)
+                            word_data["conf"].append(int(conf * 100))
+                            word_data["left"].append(tok_x)
+                            word_data["top"].append(by)
+                            word_data["width"].append(avg_token_w)
+                            word_data["height"].append(bh)
+                    else:
+                        word_data["text"].append(text_str)
+                        word_data["conf"].append(int(conf * 100))
+                        word_data["left"].append(bx)
+                        word_data["top"].append(by)
+                        word_data["width"].append(bw)
+                        word_data["height"].append(bh)
+
+            except Exception as e:
+                logger.warning(f"EasyOCR extraction exception: {e}")
+
+            raw_text = "\n".join(extracted_words) if extracted_words else (qr_info.get("data") or "")
+            photo_info = self.detect_photograph(img_bgr, word_data=word_data, qr_bbox=qr_info.get("bbox"))
+
             return {
                 "success": True,
-                "raw_text": fallback_text,
-                "text": fallback_text,
-                "confidence": 85.0 if qr_info["detected"] else 70.0,
-                "preprocessing_variant": "OpenCV Vision Fallback (Tesseract optional)",
+                "raw_text": raw_text,
+                "text": raw_text,
+                "confidence": 92.0 if extracted_words else 70.0,
+                "preprocessing_variant": "EasyOCR Deep Vision Engine",
                 "resolution": f"{w}x{h}",
                 "original_dimensions": {"width": w, "height": h},
-                "ocr_scale": scale,
+                "ocr_scale": 1.0,
                 "qr_detected": qr_info["detected"],
                 "qr_data": qr_info["data"],
                 "qr_bbox": qr_info.get("bbox"),
                 "qr_polygon": qr_info.get("polygon"),
                 "photo_detected": photo_info["detected"],
                 "photo_bbox": photo_info.get("bbox"),
-                "word_data": {"text": [], "conf": [], "left": [], "top": [], "width": [], "height": []},
+                "word_data": word_data,
             }
 
         # 1. Load image
