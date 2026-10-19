@@ -15,4 +15,12 @@ Write-Host " Directory: $FrontendDir" -ForegroundColor Gray
 Write-Host " UI URL   : http://127.0.0.1:$Port" -ForegroundColor Green
 Write-Host "==========================================================" -ForegroundColor Cyan
 
-python -m http.server $Port --directory $FrontendDir
+$VenvPython = Join-Path $ProjectRoot ".venv\Scripts\python.exe"
+if (Test-Path $VenvPython) {
+    $PythonCmd = $VenvPython
+} else {
+    $PythonCmd = "python"
+}
+
+& $PythonCmd -m http.server $Port --directory $FrontendDir
+

@@ -12,5 +12,14 @@ Write-Host " Endpoint : http://127.0.0.1:8000" -ForegroundColor Green
 Write-Host " Docs     : http://127.0.0.1:8000/docs" -ForegroundColor Green
 Write-Host "==========================================================" -ForegroundColor Cyan
 
+$VenvPython = Join-Path $ProjectRoot ".venv\Scripts\python.exe"
+if (Test-Path $VenvPython) {
+    Write-Host " Environment: Using virtual environment ($VenvPython)" -ForegroundColor Yellow
+    $PythonCmd = $VenvPython
+} else {
+    $PythonCmd = "python"
+}
+
 Set-Location -Path $BackendDir
-python -m uvicorn api:app --host 127.0.0.1 --port 8000 --reload
+& $PythonCmd -m uvicorn api:app --host 127.0.0.1 --port 8000 --reload
+
