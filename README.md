@@ -89,10 +89,6 @@ InfoShield/
    ```
    Add your Supabase project credentials in `backend/.env`:
    ```ini
-   SUPABASE_URL=https://your-project.supabase.co
-   SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
-   DEMO_USER_ID=00000000-0000-0000-0000-000000000001
-   ```
    *(If Supabase credentials are not configured, the system automatically runs with graceful local fallback).*
 
 ---
